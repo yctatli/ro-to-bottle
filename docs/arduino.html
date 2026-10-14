@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0;font-size:14px}[hidden]{display:none!important}</style>
+<title>Arduino Damacana Kontrolcüsü</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: devre tezgahı — üstte canlı bağlantı şeması + seri monitör, altında pinler, maliyet ve kod */
+:root{
+  --bg:#f3f5f6; --panel:#ffffff; --fg:#1b2730; --muted:#5d6d78; --line:#d5dde2;
+  --water:#3a8fd6; --copper:#b8743a; --live:#f2a516; --ok:#2f9e5b; --bad:#d4483b;
+  --wire:#3b4a55; --tank:#e9eef1; --sensor:#7b5cc4; --board:#1f6f8b; --pos:#c8452f;
+  --f-display:"Archivo",system-ui,sans-serif; --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#11181d; --panel:#172129; --fg:#e4ecf1; --muted:#93a5b1; --line:#2b3a45;
+  --water:#4aa3ea; --copper:#d79358; --live:#ffbe3b; --ok:#46c27a; --bad:#ef6a5d;
+  --wire:#a9bac6; --tank:#1e2b35; --sensor:#a68cf0; --board:#2b8fb2; --pos:#ef7a62; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11181d; --panel:#172129; --fg:#e4ecf1; --muted:#93a5b1; --line:#2b3a45;
+  --water:#4aa3ea; --copper:#d79358; --live:#ffbe3b; --ok:#46c27a; --bad:#ef6a5d;
+  --wire:#a9bac6; --tank:#1e2b35; --sensor:#a68cf0; --board:#2b8fb2; --pos:#ef7a62; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-display);line-height:1.55}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:28px 60px;display:grid;gap:22px}
+h1{font-size:clamp(1.6rem,3.4vw,2.4rem);font-weight:800;letter-spacing:-.02em;margin:0;text-wrap:balance}
+h2{font-size:1.2rem;margin:0 0 10px;text-wrap:balance}
+.lede{color:var(--muted);max-width:72ch;margin:6px 0 0}
+.eyebrow{font-family:var(--f-mono);font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:var(--board)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.panel h3{margin:0 0 6px;font-size:.95rem;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.panel h3 span{font-family:var(--f-mono);font-weight:400;font-size:.75rem;color:var(--muted)}
+.simgrid{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:18px}
+@media (max-width:860px){.simgrid{grid-template-columns:1fr}}
+.svgwrap{overflow-x:auto}
+svg{width:100%;height:auto;display:block;min-width:520px}
+svg text{font-family:var(--f-mono);fill:var(--fg)}
+.t-s{font-size:11px}.t-xs{font-size:9.5px;fill:var(--muted)}
+.w{fill:none;stroke:var(--wire);stroke-width:2;stroke-linejoin:round}
+.w-pos{stroke:var(--pos)}.w-sig{stroke:var(--sensor)}.w-5v{stroke:var(--copper)}
+.flow{fill:none;stroke:var(--live);stroke-width:3.4;stroke-dasharray:6 9;stroke-linecap:round;opacity:0;transition:opacity .2s}
+.flow.on{opacity:1;animation:dash .6s linear infinite}
+.flow.sens{stroke:var(--sensor)}
+@keyframes dash{to{stroke-dashoffset:-15}}
+@media (prefers-reduced-motion:reduce){.flow.on{animation:none}}
+.pin{fill:var(--panel);stroke:var(--fg);stroke-width:1.5}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
+button{font:inherit;font-weight:600;font-size:.85rem;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer}
+button.primary{background:var(--board);border-color:var(--board);color:#fff}
+button:focus-visible{outline:2px solid var(--live);outline-offset:2px}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.stat{border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+.stat small{display:block;color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.06em}
+.stat b{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.gauge{height:12px;border-radius:6px;background:var(--tank);border:1px solid var(--line);overflow:hidden;margin-top:4px}
+.gauge i{display:block;height:100%;background:var(--water);width:0}
+.pill{display:inline-block;font-family:var(--f-mono);font-size:.78rem;padding:2px 8px;border-radius:99px;border:1px solid currentColor}
+.pill.ok{color:var(--ok)}.pill.bad{color:var(--bad)}.pill.live{color:var(--live)}.pill.idle{color:var(--muted)}
+.serial{font-family:var(--f-mono);font-size:.76rem;background:#0f1519;color:#b9f5c9;border-radius:8px;padding:10px;height:210px;overflow-y:auto;margin-top:10px;line-height:1.5}
+.serial div{white-space:pre-wrap;word-break:break-word}
+.doc{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:18px}
+.doc .wide{grid-column:1/-1}
+.doc p,.doc li{max-width:72ch}
+.doc ol,.doc ul{padding-left:1.2em;margin:0;display:grid;gap:6px}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+td.num,th.num{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+tfoot td{font-weight:600}
+code{font-family:var(--f-mono);font-size:.85em;background:var(--bg);padding:1px 5px;border-radius:4px}
+.verdict{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;margin-top:6px}
+.verdict div{border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.verdict b{display:block;font-family:var(--f-mono);font-size:1.15rem}
+.codehead{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+pre.code{margin:0;font-family:var(--f-mono);font-size:.8rem;line-height:1.55;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto;max-height:560px;tab-size:2}
+.cm{color:var(--muted)}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">arduino nano · 12 V röle · xkc-y25-v · 12 V selenoid vana</div>
+    <h1>Arduino Damacana Kontrolcüsü</h1>
+    <p class="lede">Akıllı priz ve röle modülünün yerine küçük bir Arduino Nano geçer. Zamanı Arduino tutar, damacana sensörünü okur, vanayı bir röle modülüyle açıp kapatır. Karta sadece 12 V adaptör bağlanır. Vana, adaptör, T rakor, hortum ve sensör aynı kalır.</p>
+  </header>
+
+  <div class="simgrid">
+    <section class="panel">
+      <h3>Bağlantı şeması <span id="speedLbl">hızlandırılmış</span></h3>
+      <div class="svgwrap">
+      <svg viewBox="0 0 760 430" role="img" aria-label="Arduino Nano, röle modülü, selenoid vana, XKC-Y25-V sensörü, düğme ve buzzer bağlantısı">
+        <!-- adaptör -->
+        <rect x="20" y="14" width="110" height="52" rx="5" fill="var(--panel)" stroke="var(--wire)" stroke-width="2"/>
+        <text x="75" y="37" text-anchor="middle" class="t-s">ADAPTÖR</text>
+        <text x="75" y="53" text-anchor="middle" class="t-xs">12V ⎓ 1A</text>
+        <!-- raylar -->
+        <path class="w w-pos" d="M130 28H604"/>
+        <text x="140" y="22" class="t-xs" style="fill:var(--pos)">+12V</text>
+        <path class="w" d="M30 66V410H740"/>
+        <text x="40" y="424" class="t-xs">GND (ortak)</text>
+        <!-- Nano -->
+        <rect x="240" y="150" width="190" height="90" rx="6" fill="var(--board)"/>
+        <rect x="246" y="186" width="20" height="18" rx="2" fill="#c9d3d9"/>
+        <text x="335" y="190" text-anchor="middle" class="t-s" style="fill:#fff">ARDUINO NANO</text>
+        <text x="335" y="206" text-anchor="middle" class="t-xs" style="fill:#d7eef6">ATmega328P</text>
+        <circle id="ledD13" cx="410" cy="164" r="4" fill="#3a4a52"/>
+        <text x="398" y="167" text-anchor="end" class="t-xs" style="fill:#d7eef6">D13</text>
+        <!-- üst pin: VIN -->
+        <circle class="pin" cx="262" cy="150" r="4"/><text x="262" y="142" text-anchor="middle" class="t-xs">VIN</text>
+        <path class="w w-pos" d="M262 146V28"/>
+        <!-- alt pinler -->
+        <circle class="pin" cx="262" cy="240" r="4"/><text x="262" y="256" text-anchor="middle" class="t-xs">GND</text>
+        <circle class="pin" cx="292" cy="240" r="4"/><text x="292" y="256" text-anchor="middle" class="t-xs">5V</text>
+        <circle class="pin" cx="322" cy="240" r="4"/><text x="322" y="256" text-anchor="middle" class="t-xs">D2</text>
+        <circle class="pin" cx="352" cy="240" r="4"/><text x="352" y="256" text-anchor="middle" class="t-xs">D4</text>
+        <circle class="pin" cx="382" cy="240" r="4"/><text x="382" y="256" text-anchor="middle" class="t-xs">D6</text>
+        <circle class="pin" cx="430" cy="195" r="4"/><text x="438" y="188" class="t-xs">D9</text>
+        <path class="w" d="M262 244v10M262 262V410"/>
+        <!-- sensör -->
+        <rect x="60" y="290" width="120" height="76" rx="5" fill="var(--panel)" stroke="var(--sensor)" stroke-width="2"/>
+        <text x="110" y="316" text-anchor="middle" class="t-s">XKC-Y25-V</text>
+        <text x="110" y="331" text-anchor="middle" class="t-xs">damacana dışında</text>
+        <circle id="sensLed" cx="76" cy="352" r="4" fill="var(--muted)"/>
+        <text x="86" y="355" class="t-xs">LED</text>
+        <path class="w w-5v" d="M292 262V302H180"/><text x="186" y="298" class="t-xs">kahve</text>
+        <path class="w w-sig" d="M322 262V330H180"/><text x="186" y="326" class="t-xs">sarı</text>
+        <path class="w" d="M180 352h20v58"/><text x="186" y="347" class="t-xs">mavi</text>
+        <!-- 10k pulldown -->
+        <rect x="316" y="346" width="12" height="34" rx="2" fill="var(--panel)" stroke="var(--wire)" stroke-width="1.6"/>
+        <path class="w" d="M322 330v16M322 380v30"/>
+        <text x="300" y="368" text-anchor="end" class="t-xs">10k</text>
+        <!-- düğme -->
+        <path class="w" d="M352 262v40"/>
+        <circle cx="352" cy="306" r="3" fill="var(--wire)"/><circle cx="352" cy="334" r="3" fill="var(--wire)"/>
+        <line id="btnBar" x1="362" y1="304" x2="362" y2="336" stroke="var(--wire)" stroke-width="2.4"/>
+        <path class="w" d="M352 338v72"/>
+        <text x="352" y="400" text-anchor="middle" class="t-xs" transform="rotate(-90 352 400)"> </text>
+        <!-- buzzer -->
+        <path class="w" d="M382 262v38"/>
+        <circle id="buzz" cx="382" cy="316" r="14" fill="var(--panel)" stroke="var(--wire)" stroke-width="2"/>
+        <text x="382" y="320" text-anchor="middle" class="t-xs">BZ</text>
+        <path class="w" d="M382 330v80"/>
+        <text x="341" y="320" text-anchor="middle" class="t-xs" transform="rotate(-90 341 320)">düğme</text>
+        <text x="400" y="320" class="t-xs">buzzer</text>
+        <!-- röle modülü -->
+        <path class="w w-sig" d="M434 195H480"/>
+        <rect x="480" y="160" width="110" height="80" rx="5" fill="var(--panel)" stroke="var(--wire)" stroke-width="2"/>
+        <text x="522" y="256" class="t-xs">12V röle (H)</text>
+        <text x="486" y="190" class="t-xs">IN</text>
+        <rect x="498" y="198" width="34" height="22" rx="2" fill="none" stroke="var(--wire)" stroke-width="1.6"/>
+        <path d="M498 220L532 198" stroke="var(--wire)" stroke-width="1.2"/>
+        <circle id="relayLed" cx="582" cy="230" r="3.5" fill="var(--muted)"/>
+        <path class="w w-pos" d="M500 160V28"/>
+        <text x="506" y="174" class="t-xs">DC+</text>
+        <path class="w" d="M515 240V410"/>
+        <text x="522" y="270" class="t-xs">DC−</text>
+        <!-- kontaklar -->
+        <circle cx="566" cy="178" r="3" fill="var(--wire)"/><circle cx="566" cy="214" r="3" fill="var(--wire)"/>
+        <line id="relayBlade" x1="566" y1="178" x2="578" y2="208" stroke="var(--wire)" stroke-width="2.4" stroke-linecap="round"/>
+        <path class="w" d="M566 178H590M566 214H590"/>
+        <text x="548" y="174" text-anchor="end" class="t-xs">COM</text>
+        <text x="548" y="226" text-anchor="end" class="t-xs">NO</text>
+        <path class="w w-pos" d="M590 178H604V28"/>
+        <path class="w w-pos" d="M590 214H650V146"/>
+        <!-- vana -->
+        <rect id="valveBox" x="620" y="92" width="60" height="54" rx="4" fill="var(--panel)" stroke="var(--wire)" stroke-width="2"/>
+        <line x1="620" y1="146" x2="680" y2="92" stroke="var(--wire)" stroke-width="1.4"/>
+        <text x="626" y="160" class="t-xs">+</text><text x="626" y="88" class="t-xs">−</text>
+        <text x="650" y="124" text-anchor="middle" class="t-xs" style="paint-order:stroke;stroke:var(--panel);stroke-width:3">Y1</text>
+        <path class="w" d="M650 92V60H740V410"/>
+        <text x="682" y="54" class="t-xs">Y1 vana</text>
+        <!-- diyot: katot + tarafında -->
+        <path class="w" d="M650 72H706V100M706 130V180H650"/>
+        <path d="M696 100h20l-10 20z" fill="var(--panel)" stroke="var(--wire)" stroke-width="2"/>
+        <line x1="696" y1="122" x2="716" y2="122" stroke="var(--wire)" stroke-width="2.2"/>
+        <path class="w" d="M706 122v8"/>
+        <text x="660" y="200" class="t-xs">1N4007</text>
+        <!-- akışlar -->
+        <path id="fD9" class="flow" d="M434 195H480"/>
+        <path id="fValve" class="flow" d="M604 28V178H590M590 214H650V146M650 92V60H740V410"/>
+        <path id="fSens" class="flow sens" d="M180 330H322V262"/>
+        <path id="fBtn" class="flow" d="M352 262v40M352 338v72"/>
+        <path id="fBuzz" class="flow" d="M382 262v38"/>
+      </svg>
+      </div>
+      <div class="controls">
+        <button class="primary" id="play">Duraklat</button>
+        <button id="press">Düğmeye bas (D4)</button>
+        <button id="swap">Damacanayı değiştir</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>Durum <span>kodun simülasyonu</span></h3>
+      <div class="stats">
+        <div class="stat"><small>Durum</small><b><span class="pill idle" id="state">WAITING</span></b></div>
+        <div class="stat"><small>millis()</small><b id="clock">0 sa 00 dk</b></div>
+        <div class="stat"><small>Sonraki aktarım</small><b id="next">—</b></div>
+        <div class="stat"><small>Aktarım sayısı</small><b id="count">0</b></div>
+        <div class="stat" style="grid-column:1/-1"><small>Damacana · sensör 18 L'de</small><b id="botL">0 L</b><div class="gauge"><i id="gauge"></i></div></div>
+      </div>
+      <div class="serial" id="serial" aria-label="Seri monitör çıktısı"></div>
+    </section>
+  </div>
+
+  <div class="doc">
+    <section class="panel wide">
+      <h2>Maliyet düşer mi?</h2>
+      <p>Biraz düşer, ama sadece akıllı prizi henüz almadıysan. Arduino akıllı prizin yerine geçer; röle modülü iki sürümde de var. Diğer parçalar iki sürümde de aynı. Fiyatlar tahmini aralıklardır, satın almadan önce kontrol et.</p>
+      <div class="verdict">
+        <div><small>Akıllı priz + röle modülü</small><b>350–720 ₺</b></div>
+        <div><small>Nano + röle modülü + düğme/buzzer</small><b>230–480 ₺</b></div>
+        <div><small>Fark</small><b style="color:var(--ok)">~120–240 ₺ ucuz</b></div>
+      </div>
+      <div class="tablewrap" style="margin-top:14px"><table>
+        <thead><tr><th>Parça</th><th class="num">Akıllı priz sürümü</th><th class="num">Arduino sürümü</th></tr></thead>
+        <tbody>
+          <tr><td>Selenoid vana 12 V NC 1/4"</td><td class="num">250–500 ₺</td><td class="num">250–500 ₺</td></tr>
+          <tr><td>12 V 1 A adaptör</td><td class="num">100–200 ₺</td><td class="num">100–200 ₺</td></tr>
+          <tr><td>1/4" T rakor + 2 m hortum</td><td class="num">70–180 ₺</td><td class="num">70–180 ₺</td></tr>
+          <tr><td>XKC-Y25-V sensör</td><td class="num">250–450 ₺</td><td class="num">250–450 ₺</td></tr>
+          <tr><td>Wi-Fi akıllı priz</td><td class="num">300–600 ₺</td><td class="num">—</td></tr>
+          <tr><td>12 V röle modülü</td><td class="num">50–120 ₺</td><td class="num">50–120 ₺</td></tr>
+          <tr><td>Arduino Nano klon (CH340)</td><td class="num">—</td><td class="num">150–300 ₺</td></tr>
+          <tr><td>Düğme, aktif buzzer, 10k direnç</td><td class="num">—</td><td class="num">30–60 ₺</td></tr>
+          <tr><td>Kablo, klemens, kutu, 1N4007</td><td class="num">80–200 ₺</td><td class="num">80–200 ₺</td></tr>
+        </tbody>
+        <tfoot><tr><td>Toplam</td><td class="num">1.100–2.250 ₺</td><td class="num">980–2.010 ₺</td></tr></tfoot>
+      </table></div>
+      <p style="margin-top:10px"><b>Asıl kazanç para değil, kontrol.</b> Arduino vanayı açmadan önce sensörü kontrol eder, dolu damacanaya hiç açmaz. Vana süre dolunca kendiliğinden kapanır, damacana dolunca buzzer uyarır, yeni damacana takılınca kendiliğinden devam eder. <b>Kaybettiğin:</b> telefondan kontrol. Bunu da istersen aynı fiyata <b>ESP32-C3 Super Mini</b> veya <b>Wemos D1 mini</b> alabilirsin; kod neredeyse aynı kalır, üstüne Wi-Fi ve internetten saat gelir.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Pin bağlantıları</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Nereden</th><th>Nereye</th><th>Not</th></tr></thead>
+        <tbody>
+          <tr><td>Adaptör +12 V</td><td>Nano <code>VIN</code>, röle <code>DC+</code>, röle <code>COM</code></td><td>Tek besleme bu. Nano 12 V'u kendi içinde 5 V'a çevirir</td></tr>
+          <tr><td>Adaptör −</td><td>Nano <code>GND</code>, röle <code>DC−</code>, sensör mavi, vana −</td><td>Bütün GND'ler ortak</td></tr>
+          <tr><td>Sensör kahverengi</td><td>Nano <code>5V</code></td><td><b>12 V'a değil.</b> 12 V ile beslenirse sarı çıkış 12 V verir ve D2'yi yakar</td></tr>
+          <tr><td>Sensör sarı</td><td>Nano <code>D2</code></td><td>D2 ile GND arasına 10k direnç</td></tr>
+          <tr><td>Sensör siyah</td><td>boşta</td><td>Ucunu bantla</td></tr>
+          <tr><td>Nano <code>D9</code></td><td>Röle <code>IN</code></td><td>Jumper <b>H</b> konumunda: HIGH = röle çeker</td></tr>
+          <tr><td>Röle <code>NO</code></td><td>Vana + kablosu</td><td>Röle çekince vana 12 V alır</td></tr>
+          <tr><td>1N4007</td><td>Vana uçlarına ters</td><td>Çizgili uç vana + tarafına</td></tr>
+          <tr><td>Nano <code>D4</code></td><td>Düğme → GND</td><td>Dahili pull-up kullanılır</td></tr>
+          <tr><td>Nano <code>D6</code></td><td>Buzzer + (− GND)</td><td>5 V aktif buzzer, isteğe bağlı</td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:8px;font-size:.85rem;color:var(--muted)">Röle: <b>12 V, 1 kanal, optokuplörlü, H/L tetik seçmeli</b> modül al ve jumper'ı <b>H</b>'ye tak. Bobini 12 V'tan beslendiği için Nano'nun regülatörü ısınmaz. Elinde 5 V röle modülü varsa <code>VCC</code> ucunu Nano'nun 5V pinine bağla; LOW ile çekiyorsa kodda <code>RELAY_ACTIVE_LOW = true</code> yap.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Buzzer ne işe yarar?</h2>
+      <p>Damacana dolunca sistem vanayı kapatır ve <b>bekler</b>. Damacanayı değiştirene kadar başka aktarım yapmaz, arıtmanın tankı dolu kalır. Buzzer bu durumu sana haber verir: damacana dolduğu an üç kısa bip, sonra damacanayı değiştirene kadar her 10 dakikada bir üç bip.</p>
+      <ul>
+        <li>Buzzer olmadan da sistem güvenle çalışır, su taşmaz. Sadece damacananın dolduğunu kendin fark etmen gerekir.</li>
+        <li>Gece rahatsız ederse kodda <code>BUZZER_ENABLED = false</code> yap ya da <code>BEEP_EVERY_MS</code> değerini büyüt.</li>
+        <li>Buzzer yerine D6'ya 220 Ω dirençle bir LED de bağlayabilirsin. Sessiz bir “dolu” ışığı olur.</li>
+        <li>Alırken <b>5 V aktif buzzer</b> seç. Pasif buzzer bu kodla ses çıkarmaz.</li>
+      </ul>
+    </section>
+
+    <section class="panel wide">
+      <h2>Arduino'yu Mac'e bağlama</h2>
+      <div class="doc" style="gap:22px">
+        <div>
+          <h3 style="margin:0 0 6px;font-size:1rem">Gerekenler</h3>
+          <ul>
+            <li><b>USB kablosu.</b> Nano klonların çoğunda <b>Mini-USB</b>, yenilerinde <b>USB-C</b> giriş olur; kartına bak. Kablo <b>veri kablosu</b> olmalı. Sadece şarj eden ucuz kablolarda Mac kartı hiç görmez.</li>
+            <li><b>USB-C dönüştürücü.</b> Mac'inde sadece USB-C giriş varsa USB-A → USB-C adaptör veya doğrudan USB-C → Mini-USB kablo.</li>
+            <li><b>Arduino IDE 2.</b> <code>arduino.cc/en/software</code> adresinden indir. Apple Silicon (M1–M4) Mac'te “Apple Silicon”, Intel Mac'te “Intel” sürümünü seç.</li>
+            <li><b>CH340 sürücüsü</b> (sadece gerekirse). Klon Nano'lar CH340 USB çipi kullanır. macOS 11 ve sonrası çoğu zaman bunu kendisi tanır. Port görünmezse üreticinin (WCH) sitesinden <code>CH34x macOS driver</code> indirip kur.</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="margin:0 0 6px;font-size:1rem">Adım adım</h3>
+          <ol>
+            <li>İlk yüklemede 12 V adaptörü <b>takma</b>. Nano, USB'den beslenir.</li>
+            <li>Nano'yu USB ile Mac'e bağla. Kart üstündeki güç LED'i yanmalı.</li>
+            <li>Arduino IDE'yi aç. <code>File → Open</code> ile <code>damacana_kontrol.ino</code> dosyasını aç.</li>
+            <li><code>Tools → Board → Arduino AVR Boards → Arduino Nano</code> seç.</li>
+            <li><code>Tools → Processor → ATmega328P (Old Bootloader)</code> seç. Klonların çoğu bunu ister.</li>
+            <li><code>Tools → Port</code> altında <code>/dev/cu.usbserial-XXXX</code> veya <code>/dev/cu.wchusbserialXXXX</code> seç.</li>
+            <li>Sol üstteki <b>→ (Upload)</b> düğmesine bas. Alt tarafta “Done uploading” yazmalı.</li>
+            <li><code>Tools → Serial Monitor</code> aç, sağ alttan <b>9600 baud</b> seç. “Damacana kontrolcusu basladi” yazısını görmelisin.</li>
+          </ol>
+        </div>
+      </div>
+      <div class="tablewrap" style="margin-top:14px"><table>
+        <thead><tr><th>Sorun</th><th>Çözüm</th></tr></thead>
+        <tbody>
+          <tr><td>Port listesinde hiçbir şey yok</td><td>Başka bir USB kablo dene (en sık sebep şarj kablosu). Sonra CH340 sürücüsünü kur, <code>Sistem Ayarları → Gizlilik ve Güvenlik</code> altında izin ver, Mac'i yeniden başlat.</td></tr>
+          <tr><td><code>avrdude: stk500_getsync() not in sync</code></td><td>Processor'ı değiştir: Old Bootloader ↔ ATmega328P. Yine olmazsa D0/D1 pinlerine bir şey bağlı olmadığından emin ol.</td></tr>
+          <tr><td><code>Permission denied</code> / port meşgul</td><td>Seri Monitör veya başka bir program portu kullanıyor. Kapatıp tekrar yükle.</td></tr>
+          <tr><td>Yükleme tamam ama Seri Monitör'de bozuk karakterler</td><td>Baud hızını 9600 yap.</td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:8px;font-size:.85rem;color:var(--muted)">Windows'ta da aynı adımlar geçerli. Port adı <code>COM3</code>, <code>COM4</code> gibi görünür ve CH340 sürücüsünü kurmak genellikle gerekir.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Yükleme ve test</h2>
+      <ol>
+        <li>Kodu yukarıdaki adımlarla bir kez yükleyip Seri Monitör'de çalıştığını gör.</li>
+        <li>Test için ayarları kısalt: <code>INTERVAL_MS = 2UL * 60 * 1000</code> (2 dk), <code>OPEN_MS = 20UL * 1000</code> (20 sn).</li>
+        <li>Seri Monitör'ü 9600 baud'da aç. 1 dk sonra “Vana acildi” yazmalı, röle tık sesiyle çekmeli, LED'i yanmalı ve vana açılmalı.</li>
+        <li>Röle açılışta hemen çekiyor ve süre bitince bırakıyorsa ters çalışıyordur. Jumper'ı kontrol et ya da <code>RELAY_ACTIVE_LOW</code> değerini değiştir.</li>
+        <li>Sensörü dolu bir şişeye bastır. Vana anında kapanmalı, buzzer üç kez bip yapmalı. Ters çalışırsa <code>SENSOR_ACTIVE_HIGH = false</code> yap.</li>
+        <li>Testten sonra gerçek değerleri geri yaz ve tekrar yükle.</li>
+      </ol>
+      <p style="margin-top:8px">Saat hassasiyeti: Arduino gerçek saati bilmez, sadece açıldığından beri geçen süreyi sayar. Klon kartlarda günde birkaç dakika kayma olabilir; 6 saatlik aralık için önemi yok. Aktarımın belirli saatlerde olmasını istersen DS3231 saat modülü ekle (~60–100 ₺).</p>
+    </section>
+
+    <section class="panel wide">
+      <div class="codehead">
+        <h2 style="margin:0">damacana_kontrol.ino</h2>
+        <button id="copy">Kodu kopyala</button>
+      </div>
+      <pre class="code" id="code"><span class="cm">// Damacana aktarma kontrolcüsü — Arduino Nano</span>
+<span class="cm">// Arıtmanın basınçlı tankındaki suyu belirli aralıklarla 12 V selenoid vanayı açarak</span>
+<span class="cm">// damacanaya aktarır. XKC-Y25-V sensörü damacana dolunca vanayı anında kapatır.</span>
+<span class="cm">// Vana 12 V röle modülüyle sürülür. Kartın tek beslemesi 12 V adaptördür (VIN).</span>
+
+const uint8_t PIN_SENSOR = 2;   <span class="cm">// XKC-Y25-V sarı kablo (sensör Nano'nun 5V'u ile beslenir)</span>
+const uint8_t PIN_BUTTON = 4;   <span class="cm">// elle aktarım düğmesi, diğer ucu GND</span>
+const uint8_t PIN_BUZZER = 6;   <span class="cm">// aktif buzzer: damacana dolunca uyarır (isteğe bağlı)</span>
+const uint8_t PIN_VALVE  = 9;   <span class="cm">// röle modülü IN girişi</span>
+const uint8_t PIN_LED    = 13;  <span class="cm">// kart üstü LED: vana açıkken yanar</span>
+
+<span class="cm">// --- Ayarlar ---------------------------------------------------------------</span>
+const unsigned long INTERVAL_MS   = 6UL * 60 * 60 * 1000;  <span class="cm">// aktarım aralığı: 6 saat</span>
+const unsigned long OPEN_MS       = 5UL * 60 * 1000;       <span class="cm">// vana açık kalma: 5 dk</span>
+const unsigned long FIRST_RUN_MS  = 60UL * 1000;           <span class="cm">// açılıştan 1 dk sonra ilk aktarım</span>
+const unsigned long SWAP_STABLE_MS = 5000;                 <span class="cm">// sensör 5 sn boş görürse damacana değişti say</span>
+const unsigned long BEEP_EVERY_MS = 10UL * 60 * 1000;      <span class="cm">// damacana doluyken 10 dk'da bir uyar</span>
+const bool SENSOR_ACTIVE_HIGH = true;  <span class="cm">// testte ters çalışırsa false yap</span>
+const bool RELAY_ACTIVE_LOW   = false; <span class="cm">// röle LOW ile çekiyorsa (çoğu 5 V modül) true yap</span>
+const bool BUZZER_ENABLED     = true;
+<span class="cm">// ---------------------------------------------------------------------------</span>
+
+enum State { WAITING, FILLING, FULL };
+State state = WAITING;
+unsigned long lastTransfer;   <span class="cm">// son aktarımın başladığı an</span>
+unsigned long openedAt;
+unsigned long lastBeep = 0;
+unsigned long emptySince = 0;
+uint16_t transfers = 0;
+
+bool bottleFull() {
+  bool high = digitalRead(PIN_SENSOR) == HIGH;
+  return SENSOR_ACTIVE_HIGH ? high : !high;
+}
+
+void setValve(bool open) {
+  digitalWrite(PIN_VALVE, open != RELAY_ACTIVE_LOW ? HIGH : LOW);
+  digitalWrite(PIN_LED, open ? HIGH : LOW);
+}
+
+<span class="cm">// Üç kısa bip: "damacana dolu, değiştir"</span>
+void beep() {
+  if (!BUZZER_ENABLED) return;
+  for (uint8_t i = 0; i &lt; 3; i++) {
+    digitalWrite(PIN_BUZZER, HIGH);
+    delay(120);
+    digitalWrite(PIN_BUZZER, LOW);
+    delay(120);
+  }
+}
+
+<span class="cm">// Düğmeye basıldığı anı bir kez bildirir (50 ms parazit filtresi)</span>
+bool buttonPressed() {
+  static bool last = HIGH;
+  static unsigned long changedAt = 0;
+  bool now = digitalRead(PIN_BUTTON);
+  if (now != last &amp;&amp; millis() - changedAt &gt; 50) {
+    changedAt = millis();
+    last = now;
+    return now == LOW;
+  }
+  return false;
+}
+
+void startFilling(const char* why) {
+  lastTransfer = millis();
+  if (bottleFull()) {
+    Serial.println(F("Damacana dolu, aktarim atlandi"));
+    state = FULL;
+    return;
+  }
+  setValve(true);
+  openedAt = millis();
+  state = FILLING;
+  transfers++;
+  Serial.print(F("Vana acildi ("));
+  Serial.print(why);
+  Serial.print(F("), aktarim #"));
+  Serial.println(transfers);
+}
+
+void stopFilling(const char* why) {
+  setValve(false);
+  state = bottleFull() ? FULL : WAITING;
+  Serial.print(F("Vana kapandi: "));
+  Serial.println(why);
+}
+
+void setup() {
+  setValve(false);                 <span class="cm">// pini çıkış yapmadan önce kapalı seviyeye ayarla</span>
+  pinMode(PIN_VALVE, OUTPUT);      <span class="cm">// böylece açılışta röle bir an bile çekmez</span>
+  pinMode(PIN_SENSOR, INPUT);
+  pinMode(PIN_BUTTON, INPUT_PULLUP);
+  pinMode(PIN_BUZZER, OUTPUT);
+  pinMode(PIN_LED, OUTPUT);
+  Serial.begin(9600);
+  lastTransfer = millis() - INTERVAL_MS + FIRST_RUN_MS;  <span class="cm">// ilk aktarım 1 dk sonra</span>
+  Serial.println(F("Damacana kontrolcusu basladi"));
+}
+
+void loop() {
+  unsigned long now = millis();
+  bool full = bottleFull();
+  bool pressed = buttonPressed();
+
+  switch (state) {
+    case WAITING:
+      if (full) {
+        state = FULL;
+        Serial.println(F("Damacana dolu"));
+      } else if (pressed) {
+        startFilling("dugme");
+      } else if (now - lastTransfer &gt;= INTERVAL_MS) {
+        startFilling("zamanlayici");
+      }
+      break;
+
+    case FILLING:
+      if (full)                          stopFilling("damacana doldu");
+      else if (now - openedAt &gt;= OPEN_MS) stopFilling("sure bitti");
+      else if (pressed)                  stopFilling("dugme");
+      break;
+
+    case FULL:
+      if (full) {
+        emptySince = 0;
+        if (lastBeep == 0 || now - lastBeep &gt;= BEEP_EVERY_MS) {
+          lastBeep = now;
+          beep();
+        }
+      } else {
+        if (emptySince == 0) emptySince = now;
+        if (now - emptySince &gt;= SWAP_STABLE_MS) {
+          emptySince = 0;
+          state = WAITING;
+          lastTransfer = now - INTERVAL_MS + FIRST_RUN_MS;
+          Serial.println(F("Yeni damacana algilandi, 1 dk sonra aktarim"));
+        }
+      }
+      break;
+  }
+}</pre>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  // kodun ayarlarıyla aynı (dakika)
+  const INTERVAL = 360, OPEN = 5, FIRST = 1, SWAP_STABLE = 5 / 60, BEEP_EVERY = 10;
+  const SENSE_L = 18, FLOW = 0.75, TANK = 3;    // L/dk, tank başına en fazla 3 L
+  let t = 0, bot = 14, state = 'WAITING', lastTransfer = -INTERVAL + FIRST, openedAt = 0, poured = 0;
+  let transfers = 0, lastBeep = -99, emptySince = null, beepUntil = -1, btnUntil = -1, pending = false;
+  let playing = true, last = performance.now();
+  const serial = $('serial');
+  const hm = m => Math.floor(m / 60) + ' sa ' + String(Math.floor(m % 60)).padStart(2, '0') + ' dk';
+  function log(msg) {
+    const d = document.createElement('div');
+    d.textContent = `[${hm(t)}] ${msg}`;
+    serial.appendChild(d);
+    while (serial.children.length > 60) serial.firstChild.remove();
+    serial.scrollTop = serial.scrollHeight;
+  }
+  log('Damacana kontrolcusu basladi');
+  const full = () => bot >= SENSE_L;
+
+  function startFilling(why) {
+    lastTransfer = t;
+    if (full()) { log('Damacana dolu, aktarim atlandi'); state = 'FULL'; return; }
+    state = 'FILLING'; openedAt = t; poured = 0; transfers++;
+    log(`Vana acildi (${why}), aktarim #${transfers}`);
+  }
+  function stopFilling(why) {
+    state = full() ? 'FULL' : 'WAITING';
+    log('Vana kapandi: ' + why);
+  }
+
+  function step(dt) {
+    t += dt;
+    const pressed = pending; pending = false;
+    if (state === 'FILLING') {
+      const q = Math.min(FLOW * dt, TANK - poured);
+      poured += q; bot = Math.min(19, bot + q);
+    }
+    const f = full();
+    if (state === 'WAITING') {
+      if (f) { state = 'FULL'; log('Damacana dolu'); }
+      else if (pressed) startFilling('dugme');
+      else if (t - lastTransfer >= INTERVAL) startFilling('zamanlayici');
+    } else if (state === 'FILLING') {
+      if (f) stopFilling('damacana doldu');
+      else if (t - openedAt >= OPEN) stopFilling('sure bitti');
+      else if (pressed) stopFilling('dugme');
+    } else {
+      if (f) {
+        emptySince = null;
+        if (t - lastBeep >= BEEP_EVERY) { lastBeep = t; beepUntil = t + 0.25; }
+      } else {
+        if (emptySince === null) emptySince = t;
+        if (t - emptySince >= SWAP_STABLE) {
+          emptySince = null; state = 'WAITING'; lastTransfer = t - INTERVAL + FIRST;
+          log('Yeni damacana algilandi, 1 dk sonra aktarim');
+        }
+      }
+    }
+  }
+
+  function frame(now) {
+    const dtReal = Math.min((now - last) / 1000, 0.1); last = now;
+    if (playing) {
+      const speed = state === 'FILLING' ? 1.5 : state === 'FULL' ? 6 : 60;   // sim dk / sn
+      let dt = dtReal * speed;
+      while (dt > 0) { const s = Math.min(dt, 0.05); step(s); dt -= s; }
+    }
+    const filling = state === 'FILLING', f = full();
+    $('fD9').classList.toggle('on', filling);
+    $('fValve').classList.toggle('on', filling);
+    $('fSens').classList.toggle('on', f);
+    $('fBuzz').classList.toggle('on', t < beepUntil);
+    $('fBtn').classList.toggle('on', t < btnUntil);
+    $('btnBar').setAttribute('x1', t < btnUntil ? 355 : 362); $('btnBar').setAttribute('x2', t < btnUntil ? 355 : 362);
+    $('valveBox').style.fill = filling ? 'var(--live)' : '';
+    $('ledD13').setAttribute('fill', filling ? '#ffbe3b' : '#3a4a52');
+    $('relayLed').setAttribute('fill', filling ? 'var(--bad)' : 'var(--muted)');
+    $('relayBlade').setAttribute('x2', filling ? 566 : 578); $('relayBlade').setAttribute('y2', filling ? 211 : 208);
+    $('sensLed').setAttribute('fill', f ? 'var(--sensor)' : 'var(--muted)');
+    $('buzz').style.fill = t < beepUntil ? 'var(--live)' : '';
+    const st = $('state');
+    st.textContent = state;
+    st.className = 'pill ' + (filling ? 'live' : state === 'FULL' ? 'bad' : 'idle');
+    $('clock').textContent = hm(t);
+    const nxt = INTERVAL - (t - lastTransfer);
+    $('next').textContent = filling ? 'şimdi' : state === 'FULL' ? 'damacana bekleniyor' : hm(Math.max(0, nxt));
+    $('count').textContent = transfers;
+    $('botL').textContent = bot.toFixed(1).replace('.', ',') + ' L';
+    $('gauge').style.width = (bot / 19 * 100) + '%';
+    $('speedLbl').textContent = !playing ? 'duraklatıldı' : filling ? 'yavaş çekim · vana açık' : 'hızlandırılmış';
+    requestAnimationFrame(frame);
+  }
+
+  $('play').onclick = () => { playing = !playing; $('play').textContent = playing ? 'Duraklat' : 'Devam et'; };
+  $('press').onclick = () => { pending = true; btnUntil = t + (state === 'FILLING' ? 0.3 : 3); };
+  $('swap').onclick = () => { bot = 0; };
+  $('copy').onclick = () => {
+    const txt = $('code').textContent, btn = $('copy');
+    const done = m => { btn.textContent = m; setTimeout(() => btn.textContent = 'Kodu kopyala', 1600); };
+    navigator.clipboard.writeText(txt).then(() => done('Kopyalandı'), () => {
+      const r = document.createRange(); r.selectNodeContents($('code'));
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r); done('Seçildi, Ctrl+C ile kopyala');
+    });
+  };
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

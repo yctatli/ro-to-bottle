@@ -1,0 +1,1069 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0;font-size:14px}[hidden]{display:none!important}</style>
+<title>Damacana Aktarma Otomasyonu</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: bir çalışma tezgahı — üstte canlı simülasyon (fiziksel düzen + devre şeması), altında hesaplar ve uygulama notları */
+:root{
+  --bg:#f3f5f6; --panel:#ffffff; --fg:#1b2730; --muted:#5d6d78; --line:#d5dde2;
+  --water:#3a8fd6; --copper:#b8743a; --live:#f2a516; --ok:#2f9e5b; --bad:#d4483b;
+  --wire:#3b4a55; --tank:#e9eef1; --sensor:#7b5cc4; --board:#1f6f8b; --pos:#c8452f;
+  --f-display:"Archivo",system-ui,sans-serif; --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#11181d; --panel:#172129; --fg:#e4ecf1; --muted:#93a5b1; --line:#2b3a45;
+  --water:#4aa3ea; --copper:#d79358; --live:#ffbe3b; --ok:#46c27a; --bad:#ef6a5d;
+  --wire:#a9bac6; --tank:#1e2b35; --sensor:#a68cf0; --board:#2b8fb2; --pos:#ef7a62; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11181d; --panel:#172129; --fg:#e4ecf1; --muted:#93a5b1; --line:#2b3a45;
+  --water:#4aa3ea; --copper:#d79358; --live:#ffbe3b; --ok:#46c27a; --bad:#ef6a5d;
+  --wire:#a9bac6; --tank:#1e2b35; --sensor:#a68cf0; --board:#2b8fb2; --pos:#ef7a62; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-display);line-height:1.55}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:28px 60px;display:grid;gap:22px}
+h1{font-size:clamp(1.6rem,3.4vw,2.4rem);font-weight:800;letter-spacing:-.02em;margin:0;text-wrap:balance}
+h2{font-size:1.2rem;margin:0 0 10px;text-wrap:balance}
+.lede{color:var(--muted);max-width:72ch;margin:6px 0 0}
+.eyebrow{font-family:var(--f-mono);font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:var(--copper)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.panel h3{margin:0 0 6px;font-size:.95rem;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.panel h3 span{font-family:var(--f-mono);font-weight:400;font-size:.75rem;color:var(--muted)}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:var(--f-mono);fill:var(--fg)}
+.t-s{font-size:11px}.t-xs{font-size:9.5px;fill:var(--muted)}
+.wire{fill:none;stroke:var(--wire);stroke-width:2.2;stroke-linejoin:round}
+.swire{fill:none;stroke:var(--sensor);stroke-width:1.8;stroke-linejoin:round}
+.flow{fill:none;stroke:var(--live);stroke-width:3.4;stroke-dasharray:6 9;stroke-linecap:round;opacity:0;transition:opacity .2s}
+.flow.on{opacity:1;animation:dash .6s linear infinite}
+.flow.sens{stroke:var(--sensor)}
+.pipe{fill:none;stroke:var(--line);stroke-width:7;stroke-linecap:round;stroke-linejoin:round}
+.pipe-water{fill:none;stroke:var(--water);stroke-width:4;stroke-dasharray:4 7;stroke-linecap:round;stroke-linejoin:round;opacity:0}
+.pipe-water.on{opacity:1;animation:dash .35s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-15}}
+@keyframes pulse{50%{opacity:.25}}
+.blink{animation:pulse .8s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.flow.on,.pipe-water.on,.blink{animation:none}}
+.status{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--panel)}
+.stat b{display:block;font-family:var(--f-mono);font-size:1.1rem;font-variant-numeric:tabular-nums}
+.stat small{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em}
+.pill{display:inline-block;font-family:var(--f-mono);font-size:.78rem;padding:2px 8px;border-radius:99px;border:1px solid currentColor;font-weight:400}
+.pill.ok{color:var(--ok)}.pill.bad{color:var(--bad)}.pill.live{color:var(--live)}.pill.idle{color:var(--muted)}
+.controls{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:end}
+.controls label{display:grid;gap:3px;font-size:.78rem;color:var(--muted)}
+.controls select{font:inherit;font-family:var(--f-mono);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+button{font:inherit;font-weight:600;font-size:.85rem;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer}
+button.primary{background:var(--copper);border-color:var(--copper);color:#fff}
+button:focus-visible,select:focus-visible{outline:2px solid var(--live);outline-offset:2px}
+.timeline{position:relative;height:34px;border:1px solid var(--line);border-radius:6px;background:var(--bg);overflow:hidden}
+.timeline .tick{position:absolute;top:0;bottom:0;width:3px;background:var(--copper);opacity:.75}
+.timeline .now{position:absolute;top:0;bottom:0;width:2px;background:var(--fg)}
+.timeline .hr{position:absolute;bottom:1px;font-family:var(--f-mono);font-size:9px;color:var(--muted);transform:translateX(-50%)}
+.timeline .msg{position:absolute;inset:0;display:grid;place-items:center;font-size:.8rem;color:var(--muted)}
+.doc{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:18px}
+.doc .wide{grid-column:1/-1}
+.doc p,.doc li{max-width:72ch}
+.doc ol,.doc ul{padding-left:1.2em;margin:0;display:grid;gap:6px}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+td.num,th.num{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.hl td{background:color-mix(in srgb,var(--live) 14%,transparent)}
+code{font-family:var(--f-mono);font-size:.85em;background:var(--bg);padding:1px 5px;border-radius:4px}
+.calc{font-family:var(--f-mono);font-size:.85rem;background:var(--bg);border:1px dashed var(--line);border-radius:8px;padding:10px 12px;line-height:1.8;overflow-x:auto}
+.rule{border-left:3px solid var(--copper);padding:6px 12px;margin:10px 0;font-weight:600}
+.warn li::marker{color:var(--bad)}
+/* sekmeler */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{border:none;border-bottom:3px solid transparent;border-radius:0;background:none;color:var(--muted);padding:10px 16px;font-size:.95rem;white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--copper)}
+.tab small{display:block;font-family:var(--f-mono);font-weight:400;font-size:.7rem;color:var(--muted)}
+.tabpanel{display:grid;gap:22px}
+.tabintro{max-width:72ch;color:var(--muted);margin:0}
+/* arduino sekmesi */
+.simgrid{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:18px}
+@media (max-width:860px){.simgrid{grid-template-columns:1fr}}
+.svgwrap{overflow-x:auto}
+.svgwrap svg{min-width:520px}
+.w{fill:none;stroke:var(--wire);stroke-width:2;stroke-linejoin:round}
+.w-pos{stroke:var(--pos)}.w-sig{stroke:var(--sensor)}.w-5v{stroke:var(--copper)}
+.pin{fill:var(--panel);stroke:var(--fg);stroke-width:1.5}
+#tab-arduino .controls{margin-top:12px}
+#tab-arduino .stat b{font-size:1rem}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.gauge{height:12px;border-radius:6px;background:var(--tank);border:1px solid var(--line);overflow:hidden;margin-top:4px}
+.gauge i{display:block;height:100%;background:var(--water);width:0}
+.serial{font-family:var(--f-mono);font-size:.76rem;background:#0f1519;color:#b9f5c9;border-radius:8px;padding:10px;height:210px;overflow-y:auto;margin-top:10px;line-height:1.5}
+.serial div{white-space:pre-wrap;word-break:break-word}
+.verdict{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;margin-top:6px}
+.verdict div{border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.verdict b{display:block;font-family:var(--f-mono);font-size:1.15rem}
+.codehead{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+pre.code{margin:0;font-family:var(--f-mono);font-size:.8rem;line-height:1.55;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto;max-height:560px;tab-size:2}
+.cm{color:var(--muted)}
+tfoot td{font-weight:600}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">arıtma basıncı · 1/4" selenoid vana · xkc-y25-v sensör</div>
+    <h1>Damacana Aktarma Otomasyonu</h1>
+    <p class="lede">Arıtmanın 3 L'lik basınçlı tankındaki su, musluk hortumuna eklenen T rakor ve 12 V selenoid vana üzerinden damacanaya akar. Pompa gerekmez. Vanayı zamanında açmanın iki yolu var: hazır bir Wi-Fi akıllı priz ya da küçük bir Arduino Nano. Damacananın dışındaki sensör iki sürümde de su seviyesini görünce vanayı anında kapatır.</p>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="Sürüm seçimi">
+    <button class="tab" role="tab" id="tabbtn-priz" aria-controls="tab-priz" aria-selected="true">Akıllı priz sürümü<small>kod yok · telefondan kontrol</small></button>
+    <button class="tab" role="tab" id="tabbtn-arduino" aria-controls="tab-arduino" aria-selected="false">Arduino sürümü<small>~120–240 ₺ ucuz · daha akıllı</small></button>
+  </div>
+
+  <div id="tab-priz" class="tabpanel" role="tabpanel" aria-labelledby="tabbtn-priz">
+
+  <section class="panel" aria-label="Simülasyon kontrolleri">
+    <div class="controls">
+      <button class="primary" id="play">Duraklat</button>
+      <button id="trigger">Şimdi tetikle</button>
+      <button id="swap">Damacanayı değiştir</button>
+      <label for="mode">Çalışma şekli
+        <select id="mode"><option value="timer" selected>Zamanlayıcı + sensör</option><option value="sensor">Sadece sensör</option></select></label>
+      <label for="inflow">Tank (3 L) kaç saatte doluyor?
+        <select id="inflow"><option value="3">1 saatte</option><option value="1.5">2 saatte</option><option value="1">3 saatte</option><option value="0.6" selected>5 saatte</option><option value="0.375">8 saatte</option></select></label>
+      <label for="interval">Aktarım aralığı
+        <select id="interval"><option value="1">1 saat</option><option value="2">2 saat</option><option value="3">3 saat</option><option value="4">4 saat</option><option value="6" selected>6 saat</option><option value="8">8 saat</option><option value="12">12 saat</option></select></label>
+      <label for="duration">Vana açık kalma
+        <select id="duration"><option value="3">3 dk</option><option value="5" selected>5 dk</option><option value="8">8 dk</option></select></label>
+    </div>
+    <div class="status" style="margin-top:12px">
+      <div class="stat"><small>Saat</small><b id="clock">00:00</b></div>
+      <div class="stat"><small>Sonraki aktarım</small><b id="next">—</b></div>
+      <div class="stat"><small>Basınçlı tank (3 L)</small><b id="srcL">0,0 L</b></div>
+      <div class="stat"><small>Damacana (19 L)</small><b id="botL">0,0 L</b></div>
+      <div class="stat"><small>Vana</small><b><span class="pill idle" id="valvePill">kapalı</span></b></div>
+    </div>
+    <div style="margin-top:12px">
+      <div class="timeline" id="timeline" aria-label="24 saatlik zamanlayıcı programı"></div>
+    </div>
+  </section>
+
+  <div class="grid2">
+    <section class="panel">
+      <h3>Fiziksel düzen <span id="speedLbl">hızlandırılmış</span></h3>
+      <svg viewBox="0 0 640 400" role="img" aria-label="Arıtma, basınçlı tank, musluk, selenoid vana, damacana ve seviye sensörü yerleşimi">
+        <defs>
+          <clipPath id="tankClip"><rect x="62" y="262" width="86" height="98" rx="20"/></clipPath>
+          <clipPath id="botClip"><path d="M458 150h24v28c0 10 70 14 70 40v134c0 10-6 16-16 16H424c-10 0-16-6-16-16V218c0-26 50-30 50-40z"/></clipPath>
+        </defs>
+        <line x1="10" y1="372" x2="630" y2="372" stroke="var(--line)" stroke-width="2"/>
+        <!-- şebeke girişi -->
+        <path d="M10 200h20" class="pipe"/>
+        <text x="6" y="262" class="t-xs">şebeke</text>
+        <!-- arıtma -->
+        <rect x="30" y="140" width="160" height="100" rx="6" fill="var(--panel)" stroke="var(--wire)" stroke-width="2"/>
+        <rect x="46" y="156" width="22" height="70" rx="6" fill="var(--tank)" stroke="var(--wire)" stroke-width="1.5"/>
+        <rect x="76" y="156" width="22" height="70" rx="6" fill="var(--tank)" stroke="var(--wire)" stroke-width="1.5"/>
+        <rect x="106" y="156" width="22" height="70" rx="6" fill="var(--tank)" stroke="var(--wire)" stroke-width="1.5"/>
+        <rect x="136" y="170" width="44" height="18" rx="6" fill="var(--tank)" stroke="var(--wire)" stroke-width="1.5"/>
+        <text x="110" y="132" text-anchor="middle" class="t-s">Su arıtma (RO)</text>
+        <!-- basınçlı tank -->
+        <path d="M105 240v20" class="pipe"/>
+        <rect x="60" y="260" width="90" height="102" rx="22" fill="var(--tank)" stroke="var(--wire)" stroke-width="2"/>
+        <g clip-path="url(#tankClip)"><rect id="tankWater" x="60" y="360" width="90" height="0" fill="var(--water)" opacity=".75"/></g>
+        <text x="105" y="388" text-anchor="middle" class="t-s">Basınçlı tank 3 L</text>
+        <text x="160" y="300" class="t-xs" id="barTxt">0,0 bar</text>
+        <!-- musluk hattı + T -->
+        <path d="M190 200h60V70h-20" class="pipe"/>
+        <path d="M230 70v14" class="pipe" style="stroke-width:5"/>
+        <text x="236" y="58" class="t-xs">musluk</text>
+        <circle cx="250" cy="200" r="6" fill="var(--copper)"/>
+        <text x="256" y="220" class="t-xs">T</text>
+        <!-- vana kolu -->
+        <path d="M250 200h48M352 200h48V110h70v50" class="pipe"/>
+        <path id="flowPipe" d="M105 260V240M190 200h108h54h48V110h70v50" class="pipe-water"/>
+        <!-- selenoid vana -->
+        <rect x="298" y="190" width="54" height="22" rx="3" fill="var(--panel)" stroke="var(--wire)" stroke-width="2"/>
+        <rect id="valveCoil" x="309" y="166" width="32" height="24" rx="3" fill="var(--panel)" stroke="var(--copper)" stroke-width="2"/>
+        <text x="325" y="182" text-anchor="middle" class="t-xs">Y1</text>
+        <text x="325" y="228" text-anchor="middle" class="t-xs">12V NC vana</text>
+        <!-- damacana -->
+        <path d="M458 150h24v28c0 10 70 14 70 40v134c0 10-6 16-16 16H424c-10 0-16-6-16-16V218c0-26 50-30 50-40z" fill="var(--tank)" stroke="var(--wire)" stroke-width="2"/>
+        <g clip-path="url(#botClip)">
+          <rect id="botWater" x="400" y="368" width="160" height="0" fill="var(--water)" opacity=".75"/>
+          <line id="senseLine" x1="400" y1="195" x2="560" y2="195" stroke="var(--sensor)" stroke-dasharray="3 4" stroke-width="1.2"/>
+        </g>
+        <rect x="452" y="142" width="36" height="12" rx="2" fill="var(--copper)"/>
+        <text x="480" y="388" text-anchor="middle" class="t-s">Damacana 19 L</text>
+        <g transform="rotate(30 536 196)">
+          <rect x="528" y="186" width="18" height="20" rx="3" fill="var(--panel)" stroke="var(--sensor)" stroke-width="2"/>
+          <circle id="senseLed" cx="537" cy="196" r="3.5" fill="var(--muted)"/>
+        </g>
+        <text x="420" y="240" class="t-xs" id="senseTxt" style="fill:var(--sensor)">sensör: boş</text>
+        <path d="M546 186L574 160" class="swire"/>
+        <!-- elektrik -->
+        <g transform="translate(560 14)">
+          <rect x="0" y="0" width="60" height="44" rx="5" fill="var(--panel)" stroke="var(--wire)" stroke-width="2"/>
+          <circle cx="30" cy="22" r="12" fill="none" stroke="var(--copper)" stroke-width="2"/>
+          <line id="clockHand" x1="30" y1="22" x2="30" y2="13" stroke="var(--copper)" stroke-width="2"/>
+        </g>
+        <text x="555" y="36" text-anchor="end" class="t-xs">akıllı priz</text>
+        <rect x="566" y="78" width="48" height="26" rx="4" fill="var(--panel)" stroke="var(--wire)" stroke-width="2"/>
+        <text x="590" y="95" text-anchor="middle" class="t-xs">12V</text>
+        <rect x="566" y="124" width="48" height="28" rx="4" fill="var(--panel)" stroke="var(--sensor)" stroke-width="2"/>
+        <text x="590" y="142" text-anchor="middle" class="t-xs">röle</text>
+        <path d="M590 58v20M590 104v20M566 138H325v28" class="wire"/>
+        <path id="cableFlow" d="M590 58v66M566 138H325v28" class="flow"/>
+      </svg>
+    </section>
+
+    <section class="panel">
+      <h3>Devre şeması <span>230 V~ → 12 V⎓</span></h3>
+      <svg viewBox="0 0 680 400" role="img" aria-label="Zamanlayıcı, adaptör, sensör kontrollü röle ve selenoid vana devresi">
+        <circle cx="60" cy="200" r="24" fill="var(--panel)" stroke="var(--wire)" stroke-width="2.2"/>
+        <path d="M46 200c5-10 9-10 14 0s9 10 14 0" fill="none" stroke="var(--wire)" stroke-width="2"/>
+        <text x="70" y="248" class="t-s">Priz</text>
+        <text x="70" y="262" class="t-xs">230V~</text>
+        <path class="wire" d="M60 176V80h66"/>
+        <path class="wire" d="M170 80h80"/>
+        <path class="wire" d="M60 224v66h150V130h40"/>
+        <text x="80" y="72" class="t-xs">L</text><text x="80" y="284" class="t-xs">N</text>
+        <rect x="106" y="44" width="84" height="62" rx="4" fill="none" stroke="var(--copper)" stroke-dasharray="4 4"/>
+        <text x="148" y="38" text-anchor="middle" class="t-s">T1 akıllı priz</text>
+        <circle cx="126" cy="80" r="3.5" fill="var(--wire)"/><circle cx="170" cy="80" r="3.5" fill="var(--wire)"/>
+        <line id="swT" x1="126" y1="80" x2="166" y2="62" stroke="var(--wire)" stroke-width="2.6" stroke-linecap="round"/>
+        <rect x="250" y="56" width="92" height="96" rx="5" fill="var(--panel)" stroke="var(--wire)" stroke-width="2.2"/>
+        <text x="296" y="94" text-anchor="middle" class="t-s">ADAPTÖR</text>
+        <text x="296" y="110" text-anchor="middle" class="t-xs">230V~ / 12V⎓</text>
+        <text x="296" y="124" text-anchor="middle" class="t-xs">≥ 1 A</text>
+        <text x="346" y="72" class="t-xs">+</text><text x="346" y="146" class="t-xs">−</text>
+        <path class="wire" d="M342 80h18"/>
+        <rect x="360" y="72" width="34" height="16" rx="2" fill="var(--panel)" stroke="var(--wire)" stroke-width="2"/>
+        <line x1="364" y1="80" x2="390" y2="80" stroke="var(--wire)" stroke-width="1.4"/>
+        <text x="377" y="64" text-anchor="middle" class="t-xs">F1 1A</text>
+        <path class="wire" d="M394 80h96"/>
+        <circle cx="404" cy="80" r="3" fill="var(--wire)"/>
+        <!-- K1 NC -->
+        <circle cx="490" cy="80" r="3.5" fill="var(--wire)"/><circle cx="530" cy="80" r="3.5" fill="var(--wire)"/>
+        <line id="swK" x1="490" y1="80" x2="530" y2="80" stroke="var(--wire)" stroke-width="2.6" stroke-linecap="round"/>
+        <text x="510" y="56" text-anchor="middle" class="t-s">K1 (NC)</text>
+        <path class="wire" d="M530 80h60v112"/>
+        <!-- vana bobini -->
+        <rect id="coilSym" x="566" y="192" width="48" height="56" rx="3" fill="var(--panel)" stroke="var(--wire)" stroke-width="2.2"/>
+        <line x1="566" y1="248" x2="614" y2="192" stroke="var(--wire)" stroke-width="1.6"/>
+        <text x="598" y="292" class="t-s">Y1 vana</text>
+        <path class="wire" d="M590 248v72H370V130h-28"/>
+        <path class="wire" d="M590 170h56v28M646 242v28h-56"/>
+        <path d="M636 242h20l-10-20z" fill="var(--panel)" stroke="var(--wire)" stroke-width="2"/>
+        <line x1="636" y1="220" x2="656" y2="220" stroke="var(--wire)" stroke-width="2.4"/>
+        <path class="wire" d="M646 198v22"/>
+        <text x="662" y="238" class="t-xs">D1</text>
+        <!-- sensör + röle bobini -->
+        <path class="swire" d="M404 80v100"/>
+        <rect x="384" y="180" width="76" height="52" rx="4" fill="var(--panel)" stroke="var(--sensor)" stroke-width="2"/>
+        <text x="422" y="201" text-anchor="middle" class="t-s">XKC-Y25-V</text>
+        <text x="422" y="216" text-anchor="middle" class="t-xs">5–24V · 12V</text>
+        <circle id="senseLed2" cx="452" cy="190" r="3.5" fill="var(--muted)"/>
+        <path class="swire" d="M392 232v88"/>
+        <path class="swire" d="M460 206h18v-66h32v10"/>
+        <rect x="490" y="150" width="40" height="26" rx="3" fill="var(--panel)" stroke="var(--sensor)" stroke-width="2"/>
+        <text x="510" y="167" text-anchor="middle" class="t-xs">K1</text>
+        <path class="swire" d="M510 176v144"/>
+        <line x1="522" y1="150" x2="522" y2="92" stroke="var(--sensor)" stroke-dasharray="3 3" stroke-width="1.4"/>
+        <text x="398" y="250" class="t-xs">mavi −</text><text x="398" y="262" class="t-xs">siyah boşta</text>
+        <text x="440" y="134" class="t-xs">sarı OUT</text><text x="412" y="96" class="t-xs">kahve +</text>
+        <path id="acFlow" class="flow" d="M60 176V80h110h80M250 130h-40v160H60v-66"/>
+        <path id="dcFlow" class="flow" d="M342 80h188h60v112M590 248v72H370V130h-28"/>
+        <path id="coilFlow" class="flow sens" d="M460 206h18v-66h32v10M510 176v144"/>
+        <text x="30" y="344" class="t-xs">Vana yolu: Priz → T1 → Adaptör → F1 → K1(NC) → Y1 vana</text>
+        <text x="30" y="358" class="t-xs">Sensör suyu görünce sarı çıkış 12 V olur, K1 çeker, NC açılır, vana anında kapanır.</text>
+        <text x="30" y="382" class="t-s" id="logic"></text>
+      </svg>
+    </section>
+  </div>
+
+  <div class="doc">
+    <section class="panel wide">
+      <h2>3 L tank için hesaplar</h2>
+      <p>Basınçlı tank dolunca arıtma kendiliğinden durur, yani tank taşmaz. Bu yüzden zamanlayıcıyı sık tetiklemenin zararı yok, sadece her seferinde daha az su gider. En verimli ayar: <b>aktarım aralığı ≈ tankın dolma süresi</b>. Böylece her tetikte tam 3 L aktarılır.</p>
+      <div class="rule">Kural: Aralık ≥ tankın 3 L'yi doldurma süresi. Vana açık kalma süresi 5 dk.</div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Tank dolma süresi</th><th class="num">Aktarım aralığı</th><th class="num">Tetik / gün</th><th class="num">Tetik başına</th><th class="num">Damacanaya / gün</th><th class="num">Vana açık / gün</th><th class="num">Damacana dolma</th></tr></thead>
+        <tbody id="scen"></tbody>
+      </table></div>
+      <p style="margin-top:10px;color:var(--muted);font-size:.85rem">Varsayımlar: sensör 18 L'de keser (kullanılabilir 18 L). Aralıklar 24'ü tam bölüyor, böylece zamanlayıcıya her gün aynı saatler girilir. Ev tipi arıtmaların çoğu 3 L'yi 1–3 saatte doldurur. Kendi süreni ölçmek için tankı musluktan boşalt, musluğu kapat ve tekrar dolmasını bekle; dolunca arıtmadan gelen su sesi kesilir.</p>
+      <h2 style="margin-top:16px">Seçili ayarlarla</h2>
+      <div class="calc" id="calc"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Vana neden 5 dk açık?</h2>
+      <div class="calc">
+        Tank basıncı: dolu ~2–3 bar → boş ~0,3 bar<br>
+        1/4" hatta ortalama debi ≈ 1 L/dk<br>
+        3 L ÷ 1 L/dk ≈ 3 dk + pay = <b>5 dk</b>
+      </div>
+      <p>Uzun tutmanın zararı yok. Tank boşalınca vana açık kalsa da arıtma çalışmaya devam eder ve ürettiği su doğrudan damacanaya gider. Damacana dolarsa sensör vanayı kapatır.</p>
+      <p>Kendin ölç: dolu tanktan musluğu açıp bir kaba boşalt, akış iyice zayıflayana kadar geçen süreyi tut. Bu süreye 1–2 dk ekle.</p>
+    </section>
+
+    <section class="panel">
+      <h2>XKC-Y25-V bağlantısı</h2>
+      <p>Seçtiğin <b>XKC-Y25-V</b> temassız sensör, damacananın dışından plastiğin arkasındaki suyu algılar. 5–24 V ile çalışır, 12 V adaptörle doğrudan beslenir. Suyu görünce sarı çıkış besleme gerilimine (12 V) çıkar. Çıkış ~50 mA'e kadar akım verir, bu yüzden vanayı doğrudan süremez. Araya bir röle modülü girer.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Kablo</th><th>Görevi</th><th>Bağlanacağı yer</th></tr></thead>
+        <tbody>
+          <tr><td>Kahverengi</td><td>+ besleme</td><td>Adaptör +12 V</td></tr>
+          <tr><td>Mavi</td><td>− (GND)</td><td>Adaptör −</td></tr>
+          <tr><td>Sarı</td><td>Çıkış (OUT)</td><td>Röle modülü <code>IN</code></td></tr>
+          <tr><td>Siyah</td><td>Mod seçimi</td><td>Boşta bırak, ucunu bantla</td></tr>
+        </tbody>
+      </table></div>
+      <h2 style="margin-top:14px">Röle modülü</h2>
+      <ol>
+        <li>1 kanallı <b>12 V</b> röle modülü al. H/L tetik seçimi varsa jumper'ı <b>H</b> (high level) konumuna al.</li>
+        <li>Modülün <code>DC+</code> ucunu +12 V'a, <code>DC−</code> ucunu −'ye bağla.</li>
+        <li>Adaptörün +12 V'unu rölenin <code>COM</code> ucuna, vananın kablolarından birini <code>NC</code> ucuna bağla. Vananın diğer kablosu adaptör −'ye gider.</li>
+        <li>Sonuç: Damacana boşken röle bırakık kalır, NC kapalıdır, akıllı priz açınca vana açılır. Su sensör hizasına gelince sarı çıkış 12 V olur, röle çeker, NC açılır ve vana anında kapanır.</li>
+      </ol>
+      <h2 style="margin-top:14px">Takmadan önce test et</h2>
+      <ol>
+        <li>Sensörü 12 V'a bağla, damacanaya henüz yapıştırma.</li>
+        <li>Sensörü dolu bir su şişesine bastır. Sensörün LED'i yanmalı ve röle tık sesiyle çekmeli.</li>
+        <li>Tersini yapıyorsa (boşken çekiyor, suda bırakıyorsa) siyah kablonun bağlantısını değiştir: boştaysa maviye bağla, maviye bağlıysa boşa al. Ya da vanayı NC yerine <code>NO</code> ucuna bağla. İkisi de aynı işi görür.</li>
+        <li>Multimetren varsa sarı ile mavi arasını ölç: su varken ~12 V, yokken ~0 V görmelisin.</li>
+      </ol>
+      <h2 style="margin-top:14px">Damacanaya montaj</h2>
+      <ul>
+        <li>Sensörü omuz hizasına, yaklaşık 18 L seviyesine yerleştir. Ön yüzü plastiğe tam otursun, arada hava boşluğu kalmasın.</li>
+        <li>Damacana her değiştiğinde sensörü yeni damacanaya taşıman gerekir. Bu yüzden yapıştırmak yerine <b>cırt bant</b> veya lastik kayışla bağla. Ya da sensörü damacananın dayandığı sabit bir tutucuya monte et.</li>
+        <li>Sensörün yanında metal ve ıslak yüzey olmasın, yanlış algılamaya yol açabilir.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Alınacak vana</h2>
+      <p>Arıtma hortumları neredeyse her zaman <b>1/4"</b> ölçüsündedir: dış çap 6,35 mm, iç çap ~4 mm. Hortumu bir kumpasla veya cetvelle ölç. Dış çap ~9,5 mm çıkarsa senin hortumun 3/8"'dir; vana ve T'yi o ölçüde al.</p>
+      <div class="calc">
+        Tip      : selenoid vana, <b>NC</b> (normalde kapalı)<br>
+        Gerilim  : <b>12 V DC</b> (24 V DC de olur, adaptörü ona göre al)<br>
+        Bağlantı : <b>1/4" hızlı bağlantı</b> (push-fit) giriş ve çıkış<br>
+        Basınç   : 0–8 bar, <b>direkt etkili</b> (0 bar'da açar)<br>
+        Gövde    : plastik, gıdaya uygun
+      </div>
+      <p style="margin-top:8px">Arama terimi: <code>arıtma selenoid valf 12V 1/4</code> veya <code>RO solenoid valve 12V 1/4 quick connect</code>. Arıtma cihazlarının giriş vanası olarak satılan model tam olarak bu.</p>
+      <p><b>230 V vana alma.</b> Tezgah altında, su hattında şebeke gerilimi istemezsin. Akıllı prize 12 V adaptör tak, vana 12 V ile çalışsın.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Akıllı priz ayarı</h2>
+      <p>Linkteki priz Wi-Fi ile çalışan, zaman ayarlı bir priz. Bu tip prizler genelde Tuya / Smart Life uygulamasıyla kurulur. Ürün sayfasını açıp kontrol etmedim; aşağıdaki ayarlar bu uygulamalarda standart olan özelliklere göre yazıldı.</p>
+      <ol>
+        <li><b>Zamanlama:</b> Her aktarım için bir açılış ve beş dakika sonrası için bir kapanış girişi oluştur, her gün tekrarlansın. Örneğin 6 saatte bir: 00:00 aç / 00:05 kapat, 06:00 / 06:05, 12:00 / 12:05, 18:00 / 18:05.</li>
+        <li>Uygulamada <b>Döngü</b> (circulate) seçeneği varsa daha kolay: “5 dk açık, 355 dk kapalı” gir, gün boyu tekrarlasın.</li>
+        <li><b>Güç kesintisi sonrası durum: Kapalı</b> olarak ayarla. Bu ayar yanlışsa elektrik gelince vana açılabilir.</li>
+        <li>Zamanlamalar prizin içinde saklanır, internet gitse de çalışmaya devam eder. Yine de ilk kurulumda bir döngüyü izle.</li>
+      </ol>
+      <p style="margin-top:8px">Uygulamadan istediğin an elle açıp aktarım başlatabilirsin. Sensör takılıysa damacana doluyken açsan bile vana açılmaz.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Tesisat bağlantısı</h2>
+      <ol>
+        <li>Tanktan (veya son karbon filtreden) musluğa giden 1/4" hortumu kes, araya <b>1/4" hızlı bağlantı T rakor</b> tak. Musluk normal çalışmaya devam eder.</li>
+        <li>T'nin boş ucuna kısa bir 1/4" hortumla <b>12 V NC selenoid vanayı</b> bağla. Vana gövdesindeki ok akış yönünü gösterir.</li>
+        <li>Vananın çıkışından 1/4" hortumu damacana kapağındaki deliğe sok. Hortum ucu suyun içine değmesin, hava boşluğu kalsın.</li>
+        <li>Sensörü damacananın omzuna, 18 L hizasına cırt bantla bağla.</li>
+        <li>İlk açılışta vanayı elle tetikle ve rakorlarda sızıntı kontrolü yap.</li>
+      </ol>
+    </section>
+
+    <section class="panel wide">
+      <h2>Maliyet</h2>
+      <p>Fiyatlar Türkiye'deki tahmini piyasa aralıkları. Ürün sayfaları otomatik okumaya kapalı olduğu için fiyatları sitelerden kontrol edemedim. Satın almadan önce güncel fiyatlara bak.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Parça</th><th>Özellik</th><th class="num">Adet</th><th class="num">Tahmini fiyat</th><th>Durum</th></tr></thead>
+        <tbody>
+          <tr><td>Akıllı priz</td><td>Wi-Fi, zaman ayarlı (seçtiğin model)</td><td class="num">1</td><td class="num">300–600 ₺</td><td>sende</td></tr>
+          <tr><td>Selenoid vana</td><td>12 V DC, NC, 1/4" hızlı bağlantı, direkt etkili</td><td class="num">1</td><td class="num">250–500 ₺</td><td><b>gerekli</b></td></tr>
+          <tr><td>Adaptör</td><td>12 V ⎓ 1 A, DC jak çıkışlı</td><td class="num">1</td><td class="num">100–200 ₺</td><td><b>gerekli</b></td></tr>
+          <tr><td>T rakor</td><td>1/4" hızlı bağlantı</td><td class="num">1</td><td class="num">30–80 ₺</td><td><b>gerekli</b></td></tr>
+          <tr><td>Hortum</td><td>1/4" arıtma hortumu</td><td class="num">2 m</td><td class="num">40–100 ₺</td><td><b>gerekli</b></td></tr>
+          <tr><td>Seviye sensörü</td><td>XKC-Y25-V (seçtiğin ürün)</td><td class="num">1</td><td class="num">250–450 ₺</td><td>önerilir</td></tr>
+          <tr><td>Röle modülü</td><td>1 kanal, 12 V, H/L tetik seçmeli</td><td class="num">1</td><td class="num">50–120 ₺</td><td>önerilir</td></tr>
+          <tr><td>Küçük malzeme</td><td>DC jak klemens, 2 damarlı kablo, cırt bant, kutu, 1N4007</td><td class="num">—</td><td class="num">80–200 ₺</td><td>önerilir</td></tr>
+        </tbody>
+        <tfoot>
+          <tr><td colspan="3"><b>Sensörsüz en sade kurulum</b> (vana + adaptör + T + hortum)</td><td class="num"><b>420–880 ₺</b></td><td></td></tr>
+          <tr><td colspan="3"><b>Sensörlü önerilen kurulum</b> (akıllı priz hariç)</td><td class="num"><b>800–1.650 ₺</b></td><td></td></tr>
+        </tfoot>
+      </table></div>
+      <p style="margin-top:8px;color:var(--muted);font-size:.85rem">Çalışma maliyeti yok denecek kadar az: vana açıkken ~5 W çeker, günde 4 × 5 dk = 20 dk çalışır. Bu ayda yaklaşık 0,05 kWh eder. Akıllı prizin bekleme tüketimi bundan fazladır (~0,5–1 W).</p>
+    </section>
+
+    <section class="panel">
+      <h2>Dikkat edilecekler</h2>
+      <ul class="warn">
+        <li><b>Vana tipi önemli.</b> Pilot kumandalı (servo) vanalar açılmak için 0,2–0,5 bar basınç farkı ister. Tank boşalmaya yakın basınç düşünce bu vanalar tam açılmaz. Arıtma için satılan direkt etkili 1/4" vanaları seç.</li>
+        <li>Vana açıkken musluğun basıncı düşer. Aktarımları musluğu az kullandığın saatlere (gece, öğle) koy.</li>
+        <li>Asıl risk vananın açık takılı kalması ve sensörün de arızalanması. Damacananın altına bir tepsi koy veya ilk günlerde kontrol et.</li>
+        <li>Arıtmanda pompa varsa ve tank basıncı yüksekse (3 bar üstü), vananın basınç değerinin buna uygun olduğunu kontrol et.</li>
+        <li>Akıllı prizi ve adaptörü tezgah altındaki ıslak alandan uzak, yüksekte bir prize tak. Su hattına sadece 12 V kablo insin.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Sensörsüz en sade kurulum</h2>
+      <p>Sadece <b>akıllı priz + 12 V adaptör + vana + T rakor</b> ile de çalışır. Adaptörün kablosu doğrudan vanaya bağlanır, röle ve sensör olmaz.</p>
+      <p>Bu durumda damacananın taşmamasını hesap sağlar: her aktarımda en fazla 3 L gider, 18 L için 6 aktarım yapılır. Damacanayı 6. aktarımdan önce değiştirmen gerekir. Unutursan su taşar. Sensör yaklaşık bir röle modülü ve sensör maliyetinde bu riski kaldırır, bu yüzden eklemeni öneririm.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Zamanlayıcısız seçenek</h2>
+      <p>Zamanlayıcıyı tamamen çıkarıp adaptörü doğrudan prize takabilirsin. Bu durumda vana, damacana dolana kadar sürekli açık kalır ve arıtma ürettiği suyu doğrudan damacanaya basar. En hızlı ve en basit dolum budur.</p>
+      <p>Bedeli: Bu sürede tank boş kalır ve musluktan zayıf su gelir. Musluğu sık kullanıyorsan zamanlayıcılı düzen daha uygun. Yukarıdaki simülasyonda “Sadece sensör” seçeneğiyle ikisini karşılaştırabilirsin.</p>
+    </section>
+  </div>
+  </div>
+
+  <div id="tab-arduino" class="tabpanel" role="tabpanel" aria-labelledby="tabbtn-arduino" hidden>
+    <p class="tabintro">Akıllı prizin yerine bir Arduino Nano geçer. Karta sadece 12 V adaptör bağlanır. Zamanı Arduino tutar, sensörü okur, vanayı bir röle modülüyle açıp kapatır. Vana, adaptör, T rakor, hortum ve sensör aynı kalır.</p>
+
+
+  <div class="simgrid">
+    <section class="panel">
+      <h3>Bağlantı şeması <span id="a-speedLbl">hızlandırılmış</span></h3>
+      <div class="svgwrap">
+      <svg viewBox="0 0 760 430" role="img" aria-label="Arduino Nano, röle modülü, selenoid vana, XKC-Y25-V sensörü, düğme ve buzzer bağlantısı">
+        <!-- adaptör -->
+        <rect x="20" y="14" width="110" height="52" rx="5" fill="var(--panel)" stroke="var(--wire)" stroke-width="2"/>
+        <text x="75" y="37" text-anchor="middle" class="t-s">ADAPTÖR</text>
+        <text x="75" y="53" text-anchor="middle" class="t-xs">12V ⎓ 1A</text>
+        <!-- raylar -->
+        <path class="w w-pos" d="M130 28H604"/>
+        <text x="140" y="22" class="t-xs" style="fill:var(--pos)">+12V</text>
+        <path class="w" d="M30 66V410H740"/>
+        <text x="40" y="424" class="t-xs">GND (ortak)</text>
+        <!-- Nano -->
+        <rect x="240" y="150" width="190" height="90" rx="6" fill="var(--board)"/>
+        <rect x="246" y="186" width="20" height="18" rx="2" fill="#c9d3d9"/>
+        <text x="335" y="190" text-anchor="middle" class="t-s" style="fill:#fff">ARDUINO NANO</text>
+        <text x="335" y="206" text-anchor="middle" class="t-xs" style="fill:#d7eef6">ATmega328P</text>
+        <circle id="a-ledD13" cx="410" cy="164" r="4" fill="#3a4a52"/>
+        <text x="398" y="167" text-anchor="end" class="t-xs" style="fill:#d7eef6">D13</text>
+        <!-- üst pin: VIN -->
+        <circle class="pin" cx="262" cy="150" r="4"/><text x="262" y="142" text-anchor="middle" class="t-xs">VIN</text>
+        <path class="w w-pos" d="M262 146V28"/>
+        <!-- alt pinler -->
+        <circle class="pin" cx="262" cy="240" r="4"/><text x="262" y="256" text-anchor="middle" class="t-xs">GND</text>
+        <circle class="pin" cx="292" cy="240" r="4"/><text x="292" y="256" text-anchor="middle" class="t-xs">5V</text>
+        <circle class="pin" cx="322" cy="240" r="4"/><text x="322" y="256" text-anchor="middle" class="t-xs">D2</text>
+        <circle class="pin" cx="352" cy="240" r="4"/><text x="352" y="256" text-anchor="middle" class="t-xs">D4</text>
+        <circle class="pin" cx="382" cy="240" r="4"/><text x="382" y="256" text-anchor="middle" class="t-xs">D6</text>
+        <circle class="pin" cx="430" cy="195" r="4"/><text x="438" y="188" class="t-xs">D9</text>
+        <path class="w" d="M262 244v10M262 262V410"/>
+        <!-- sensör -->
+        <rect x="60" y="290" width="120" height="76" rx="5" fill="var(--panel)" stroke="var(--sensor)" stroke-width="2"/>
+        <text x="110" y="316" text-anchor="middle" class="t-s">XKC-Y25-V</text>
+        <text x="110" y="331" text-anchor="middle" class="t-xs">damacana dışında</text>
+        <circle id="a-sensLed" cx="76" cy="352" r="4" fill="var(--muted)"/>
+        <text x="86" y="355" class="t-xs">LED</text>
+        <path class="w w-5v" d="M292 262V302H180"/><text x="186" y="298" class="t-xs">kahve</text>
+        <path class="w w-sig" d="M322 262V330H180"/><text x="186" y="326" class="t-xs">sarı</text>
+        <path class="w" d="M180 352h20v58"/><text x="186" y="347" class="t-xs">mavi</text>
+        <!-- 10k pulldown -->
+        <rect x="316" y="346" width="12" height="34" rx="2" fill="var(--panel)" stroke="var(--wire)" stroke-width="1.6"/>
+        <path class="w" d="M322 330v16M322 380v30"/>
+        <text x="300" y="368" text-anchor="end" class="t-xs">10k</text>
+        <!-- düğme -->
+        <path class="w" d="M352 262v40"/>
+        <circle cx="352" cy="306" r="3" fill="var(--wire)"/><circle cx="352" cy="334" r="3" fill="var(--wire)"/>
+        <line id="a-btnBar" x1="362" y1="304" x2="362" y2="336" stroke="var(--wire)" stroke-width="2.4"/>
+        <path class="w" d="M352 338v72"/>
+        <text x="352" y="400" text-anchor="middle" class="t-xs" transform="rotate(-90 352 400)"> </text>
+        <!-- buzzer -->
+        <path class="w" d="M382 262v38"/>
+        <circle id="a-buzz" cx="382" cy="316" r="14" fill="var(--panel)" stroke="var(--wire)" stroke-width="2"/>
+        <text x="382" y="320" text-anchor="middle" class="t-xs">BZ</text>
+        <path class="w" d="M382 330v80"/>
+        <text x="341" y="320" text-anchor="middle" class="t-xs" transform="rotate(-90 341 320)">düğme</text>
+        <text x="400" y="320" class="t-xs">buzzer</text>
+        <!-- röle modülü -->
+        <path class="w w-sig" d="M434 195H480"/>
+        <rect x="480" y="160" width="110" height="80" rx="5" fill="var(--panel)" stroke="var(--wire)" stroke-width="2"/>
+        <text x="522" y="256" class="t-xs">12V röle (H)</text>
+        <text x="486" y="190" class="t-xs">IN</text>
+        <rect x="498" y="198" width="34" height="22" rx="2" fill="none" stroke="var(--wire)" stroke-width="1.6"/>
+        <path d="M498 220L532 198" stroke="var(--wire)" stroke-width="1.2"/>
+        <circle id="a-relayLed" cx="582" cy="230" r="3.5" fill="var(--muted)"/>
+        <path class="w w-pos" d="M500 160V28"/>
+        <text x="506" y="174" class="t-xs">DC+</text>
+        <path class="w" d="M515 240V410"/>
+        <text x="522" y="270" class="t-xs">DC−</text>
+        <!-- kontaklar -->
+        <circle cx="566" cy="178" r="3" fill="var(--wire)"/><circle cx="566" cy="214" r="3" fill="var(--wire)"/>
+        <line id="a-relayBlade" x1="566" y1="178" x2="578" y2="208" stroke="var(--wire)" stroke-width="2.4" stroke-linecap="round"/>
+        <path class="w" d="M566 178H590M566 214H590"/>
+        <text x="548" y="174" text-anchor="end" class="t-xs">COM</text>
+        <text x="548" y="226" text-anchor="end" class="t-xs">NO</text>
+        <path class="w w-pos" d="M590 178H604V28"/>
+        <path class="w w-pos" d="M590 214H650V146"/>
+        <!-- vana -->
+        <rect id="a-valveBox" x="620" y="92" width="60" height="54" rx="4" fill="var(--panel)" stroke="var(--wire)" stroke-width="2"/>
+        <line x1="620" y1="146" x2="680" y2="92" stroke="var(--wire)" stroke-width="1.4"/>
+        <text x="626" y="160" class="t-xs">+</text><text x="626" y="88" class="t-xs">−</text>
+        <text x="650" y="124" text-anchor="middle" class="t-xs" style="paint-order:stroke;stroke:var(--panel);stroke-width:3">Y1</text>
+        <path class="w" d="M650 92V60H740V410"/>
+        <text x="682" y="54" class="t-xs">Y1 vana</text>
+        <!-- diyot: katot + tarafında -->
+        <path class="w" d="M650 72H706V100M706 130V180H650"/>
+        <path d="M696 100h20l-10 20z" fill="var(--panel)" stroke="var(--wire)" stroke-width="2"/>
+        <line x1="696" y1="122" x2="716" y2="122" stroke="var(--wire)" stroke-width="2.2"/>
+        <path class="w" d="M706 122v8"/>
+        <text x="660" y="200" class="t-xs">1N4007</text>
+        <!-- akışlar -->
+        <path id="a-fD9" class="flow" d="M434 195H480"/>
+        <path id="a-fValve" class="flow" d="M604 28V178H590M590 214H650V146M650 92V60H740V410"/>
+        <path id="a-fSens" class="flow sens" d="M180 330H322V262"/>
+        <path id="a-fBtn" class="flow" d="M352 262v40M352 338v72"/>
+        <path id="a-fBuzz" class="flow" d="M382 262v38"/>
+      </svg>
+      </div>
+      <div class="controls">
+        <button class="primary" id="a-play">Duraklat</button>
+        <button id="a-press">Düğmeye bas (D4)</button>
+        <button id="a-swap">Damacanayı değiştir</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>Durum <span>kodun simülasyonu</span></h3>
+      <div class="stats">
+        <div class="stat"><small>Durum</small><b><span class="pill idle" id="a-state">WAITING</span></b></div>
+        <div class="stat"><small>millis()</small><b id="a-clock">0 sa 00 dk</b></div>
+        <div class="stat"><small>Sonraki aktarım</small><b id="a-next">—</b></div>
+        <div class="stat"><small>Aktarım sayısı</small><b id="a-count">0</b></div>
+        <div class="stat" style="grid-column:1/-1"><small>Damacana · sensör 18 L'de</small><b id="a-botL">0 L</b><div class="gauge"><i id="a-gauge"></i></div></div>
+      </div>
+      <div class="serial" id="a-serial" aria-label="Seri monitör çıktısı"></div>
+    </section>
+  </div>
+
+  <div class="doc">
+    <section class="panel wide">
+      <h2>Maliyet düşer mi?</h2>
+      <p>Biraz düşer, ama sadece akıllı prizi henüz almadıysan. Arduino akıllı prizin yerine geçer; röle modülü iki sürümde de var. Diğer parçalar iki sürümde de aynı. Fiyatlar tahmini aralıklardır, satın almadan önce kontrol et.</p>
+      <div class="verdict">
+        <div><small>Akıllı priz + röle modülü</small><b>350–720 ₺</b></div>
+        <div><small>Nano + röle modülü + düğme/buzzer</small><b>230–480 ₺</b></div>
+        <div><small>Fark</small><b style="color:var(--ok)">~120–240 ₺ ucuz</b></div>
+      </div>
+      <div class="tablewrap" style="margin-top:14px"><table>
+        <thead><tr><th>Parça</th><th class="num">Akıllı priz sürümü</th><th class="num">Arduino sürümü</th></tr></thead>
+        <tbody>
+          <tr><td>Selenoid vana 12 V NC 1/4"</td><td class="num">250–500 ₺</td><td class="num">250–500 ₺</td></tr>
+          <tr><td>12 V 1 A adaptör</td><td class="num">100–200 ₺</td><td class="num">100–200 ₺</td></tr>
+          <tr><td>1/4" T rakor + 2 m hortum</td><td class="num">70–180 ₺</td><td class="num">70–180 ₺</td></tr>
+          <tr><td>XKC-Y25-V sensör</td><td class="num">250–450 ₺</td><td class="num">250–450 ₺</td></tr>
+          <tr><td>Wi-Fi akıllı priz</td><td class="num">300–600 ₺</td><td class="num">—</td></tr>
+          <tr><td>12 V röle modülü</td><td class="num">50–120 ₺</td><td class="num">50–120 ₺</td></tr>
+          <tr><td>Arduino Nano klon (CH340)</td><td class="num">—</td><td class="num">150–300 ₺</td></tr>
+          <tr><td>Düğme, aktif buzzer, 10k direnç</td><td class="num">—</td><td class="num">30–60 ₺</td></tr>
+          <tr><td>Kablo, klemens, kutu, 1N4007</td><td class="num">80–200 ₺</td><td class="num">80–200 ₺</td></tr>
+        </tbody>
+        <tfoot><tr><td>Toplam</td><td class="num">1.100–2.250 ₺</td><td class="num">980–2.010 ₺</td></tr></tfoot>
+      </table></div>
+      <p style="margin-top:10px"><b>Asıl kazanç para değil, kontrol.</b> Arduino vanayı açmadan önce sensörü kontrol eder, dolu damacanaya hiç açmaz. Vana süre dolunca kendiliğinden kapanır, damacana dolunca buzzer uyarır, yeni damacana takılınca kendiliğinden devam eder. <b>Kaybettiğin:</b> telefondan kontrol. Bunu da istersen aynı fiyata <b>ESP32-C3 Super Mini</b> veya <b>Wemos D1 mini</b> alabilirsin; kod neredeyse aynı kalır, üstüne Wi-Fi ve internetten saat gelir.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Pin bağlantıları</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Nereden</th><th>Nereye</th><th>Not</th></tr></thead>
+        <tbody>
+          <tr><td>Adaptör +12 V</td><td>Nano <code>VIN</code>, röle <code>DC+</code>, röle <code>COM</code></td><td>Tek besleme bu. Nano 12 V'u kendi içinde 5 V'a çevirir</td></tr>
+          <tr><td>Adaptör −</td><td>Nano <code>GND</code>, röle <code>DC−</code>, sensör mavi, vana −</td><td>Bütün GND'ler ortak</td></tr>
+          <tr><td>Sensör kahverengi</td><td>Nano <code>5V</code></td><td><b>12 V'a değil.</b> 12 V ile beslenirse sarı çıkış 12 V verir ve D2'yi yakar</td></tr>
+          <tr><td>Sensör sarı</td><td>Nano <code>D2</code></td><td>D2 ile GND arasına 10k direnç</td></tr>
+          <tr><td>Sensör siyah</td><td>boşta</td><td>Ucunu bantla</td></tr>
+          <tr><td>Nano <code>D9</code></td><td>Röle <code>IN</code></td><td>Jumper <b>H</b> konumunda: HIGH = röle çeker</td></tr>
+          <tr><td>Röle <code>NO</code></td><td>Vana + kablosu</td><td>Röle çekince vana 12 V alır</td></tr>
+          <tr><td>1N4007</td><td>Vana uçlarına ters</td><td>Çizgili uç vana + tarafına</td></tr>
+          <tr><td>Nano <code>D4</code></td><td>Düğme → GND</td><td>Dahili pull-up kullanılır</td></tr>
+          <tr><td>Nano <code>D6</code></td><td>Buzzer + (− GND)</td><td>5 V aktif buzzer, isteğe bağlı</td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:8px;font-size:.85rem;color:var(--muted)">Röle: <b>12 V, 1 kanal, optokuplörlü, H/L tetik seçmeli</b> modül al ve jumper'ı <b>H</b>'ye tak. Bobini 12 V'tan beslendiği için Nano'nun regülatörü ısınmaz. Elinde 5 V röle modülü varsa <code>VCC</code> ucunu Nano'nun 5V pinine bağla; LOW ile çekiyorsa kodda <code>RELAY_ACTIVE_LOW = true</code> yap.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Buzzer ne işe yarar?</h2>
+      <p>Damacana dolunca sistem vanayı kapatır ve <b>bekler</b>. Damacanayı değiştirene kadar başka aktarım yapmaz, arıtmanın tankı dolu kalır. Buzzer bu durumu sana haber verir: damacana dolduğu an üç kısa bip, sonra damacanayı değiştirene kadar her 10 dakikada bir üç bip.</p>
+      <ul>
+        <li>Buzzer olmadan da sistem güvenle çalışır, su taşmaz. Sadece damacananın dolduğunu kendin fark etmen gerekir.</li>
+        <li>Gece rahatsız ederse kodda <code>BUZZER_ENABLED = false</code> yap ya da <code>BEEP_EVERY_MS</code> değerini büyüt.</li>
+        <li>Buzzer yerine D6'ya 220 Ω dirençle bir LED de bağlayabilirsin. Sessiz bir “dolu” ışığı olur.</li>
+        <li>Alırken <b>5 V aktif buzzer</b> seç. Pasif buzzer bu kodla ses çıkarmaz.</li>
+      </ul>
+    </section>
+
+    <section class="panel wide">
+      <h2>Arduino'yu Mac'e bağlama</h2>
+      <div class="doc" style="gap:22px">
+        <div>
+          <h3 style="margin:0 0 6px;font-size:1rem">Gerekenler</h3>
+          <ul>
+            <li><b>USB kablosu.</b> Nano klonların çoğunda <b>Mini-USB</b>, yenilerinde <b>USB-C</b> giriş olur; kartına bak. Kablo <b>veri kablosu</b> olmalı. Sadece şarj eden ucuz kablolarda Mac kartı hiç görmez.</li>
+            <li><b>USB-C dönüştürücü.</b> Mac'inde sadece USB-C giriş varsa USB-A → USB-C adaptör veya doğrudan USB-C → Mini-USB kablo.</li>
+            <li><b>Arduino IDE 2.</b> <code>arduino.cc/en/software</code> adresinden indir. Apple Silicon (M1–M4) Mac'te “Apple Silicon”, Intel Mac'te “Intel” sürümünü seç.</li>
+            <li><b>CH340 sürücüsü</b> (sadece gerekirse). Klon Nano'lar CH340 USB çipi kullanır. macOS 11 ve sonrası çoğu zaman bunu kendisi tanır. Port görünmezse üreticinin (WCH) sitesinden <code>CH34x macOS driver</code> indirip kur.</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="margin:0 0 6px;font-size:1rem">Adım adım</h3>
+          <ol>
+            <li>İlk yüklemede 12 V adaptörü <b>takma</b>. Nano, USB'den beslenir.</li>
+            <li>Nano'yu USB ile Mac'e bağla. Kart üstündeki güç LED'i yanmalı.</li>
+            <li>Arduino IDE'yi aç. <code>File → Open</code> ile <code>damacana_kontrol.ino</code> dosyasını aç.</li>
+            <li><code>Tools → Board → Arduino AVR Boards → Arduino Nano</code> seç.</li>
+            <li><code>Tools → Processor → ATmega328P (Old Bootloader)</code> seç. Klonların çoğu bunu ister.</li>
+            <li><code>Tools → Port</code> altında <code>/dev/cu.usbserial-XXXX</code> veya <code>/dev/cu.wchusbserialXXXX</code> seç.</li>
+            <li>Sol üstteki <b>→ (Upload)</b> düğmesine bas. Alt tarafta “Done uploading” yazmalı.</li>
+            <li><code>Tools → Serial Monitor</code> aç, sağ alttan <b>9600 baud</b> seç. “Damacana kontrolcusu basladi” yazısını görmelisin.</li>
+          </ol>
+        </div>
+      </div>
+      <div class="tablewrap" style="margin-top:14px"><table>
+        <thead><tr><th>Sorun</th><th>Çözüm</th></tr></thead>
+        <tbody>
+          <tr><td>Port listesinde hiçbir şey yok</td><td>Başka bir USB kablo dene (en sık sebep şarj kablosu). Sonra CH340 sürücüsünü kur, <code>Sistem Ayarları → Gizlilik ve Güvenlik</code> altında izin ver, Mac'i yeniden başlat.</td></tr>
+          <tr><td><code>avrdude: stk500_getsync() not in sync</code></td><td>Processor'ı değiştir: Old Bootloader ↔ ATmega328P. Yine olmazsa D0/D1 pinlerine bir şey bağlı olmadığından emin ol.</td></tr>
+          <tr><td><code>Permission denied</code> / port meşgul</td><td>Seri Monitör veya başka bir program portu kullanıyor. Kapatıp tekrar yükle.</td></tr>
+          <tr><td>Yükleme tamam ama Seri Monitör'de bozuk karakterler</td><td>Baud hızını 9600 yap.</td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:8px;font-size:.85rem;color:var(--muted)">Windows'ta da aynı adımlar geçerli. Port adı <code>COM3</code>, <code>COM4</code> gibi görünür ve CH340 sürücüsünü kurmak genellikle gerekir.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Yükleme ve test</h2>
+      <ol>
+        <li>Kodu yukarıdaki adımlarla bir kez yükleyip Seri Monitör'de çalıştığını gör.</li>
+        <li>Test için ayarları kısalt: <code>INTERVAL_MS = 2UL * 60 * 1000</code> (2 dk), <code>OPEN_MS = 20UL * 1000</code> (20 sn).</li>
+        <li>Seri Monitör'ü 9600 baud'da aç. 1 dk sonra “Vana acildi” yazmalı, röle tık sesiyle çekmeli, LED'i yanmalı ve vana açılmalı.</li>
+        <li>Röle açılışta hemen çekiyor ve süre bitince bırakıyorsa ters çalışıyordur. Jumper'ı kontrol et ya da <code>RELAY_ACTIVE_LOW</code> değerini değiştir.</li>
+        <li>Sensörü dolu bir şişeye bastır. Vana anında kapanmalı, buzzer üç kez bip yapmalı. Ters çalışırsa <code>SENSOR_ACTIVE_HIGH = false</code> yap.</li>
+        <li>Testten sonra gerçek değerleri geri yaz ve tekrar yükle.</li>
+      </ol>
+      <p style="margin-top:8px">Saat hassasiyeti: Arduino gerçek saati bilmez, sadece açıldığından beri geçen süreyi sayar. Klon kartlarda günde birkaç dakika kayma olabilir; 6 saatlik aralık için önemi yok. Aktarımın belirli saatlerde olmasını istersen DS3231 saat modülü ekle (~60–100 ₺).</p>
+    </section>
+
+    <section class="panel wide">
+      <div class="codehead">
+        <h2 style="margin:0">damacana_kontrol.ino</h2>
+        <button id="a-copy">Kodu kopyala</button>
+      </div>
+      <pre class="code" id="a-code"><span class="cm">// Damacana aktarma kontrolcüsü — Arduino Nano</span>
+<span class="cm">// Arıtmanın basınçlı tankındaki suyu belirli aralıklarla 12 V selenoid vanayı açarak</span>
+<span class="cm">// damacanaya aktarır. XKC-Y25-V sensörü damacana dolunca vanayı anında kapatır.</span>
+<span class="cm">// Vana 12 V röle modülüyle sürülür. Kartın tek beslemesi 12 V adaptördür (VIN).</span>
+
+const uint8_t PIN_SENSOR = 2;   <span class="cm">// XKC-Y25-V sarı kablo (sensör Nano'nun 5V'u ile beslenir)</span>
+const uint8_t PIN_BUTTON = 4;   <span class="cm">// elle aktarım düğmesi, diğer ucu GND</span>
+const uint8_t PIN_BUZZER = 6;   <span class="cm">// aktif buzzer: damacana dolunca uyarır (isteğe bağlı)</span>
+const uint8_t PIN_VALVE  = 9;   <span class="cm">// röle modülü IN girişi</span>
+const uint8_t PIN_LED    = 13;  <span class="cm">// kart üstü LED: vana açıkken yanar</span>
+
+<span class="cm">// --- Ayarlar ---------------------------------------------------------------</span>
+const unsigned long INTERVAL_MS   = 6UL * 60 * 60 * 1000;  <span class="cm">// aktarım aralığı: 6 saat</span>
+const unsigned long OPEN_MS       = 5UL * 60 * 1000;       <span class="cm">// vana açık kalma: 5 dk</span>
+const unsigned long FIRST_RUN_MS  = 60UL * 1000;           <span class="cm">// açılıştan 1 dk sonra ilk aktarım</span>
+const unsigned long SWAP_STABLE_MS = 5000;                 <span class="cm">// sensör 5 sn boş görürse damacana değişti say</span>
+const unsigned long BEEP_EVERY_MS = 10UL * 60 * 1000;      <span class="cm">// damacana doluyken 10 dk'da bir uyar</span>
+const bool SENSOR_ACTIVE_HIGH = true;  <span class="cm">// testte ters çalışırsa false yap</span>
+const bool RELAY_ACTIVE_LOW   = false; <span class="cm">// röle LOW ile çekiyorsa (çoğu 5 V modül) true yap</span>
+const bool BUZZER_ENABLED     = true;
+<span class="cm">// ---------------------------------------------------------------------------</span>
+
+enum State { WAITING, FILLING, FULL };
+State state = WAITING;
+unsigned long lastTransfer;   <span class="cm">// son aktarımın başladığı an</span>
+unsigned long openedAt;
+unsigned long lastBeep = 0;
+unsigned long emptySince = 0;
+uint16_t transfers = 0;
+
+bool bottleFull() {
+  bool high = digitalRead(PIN_SENSOR) == HIGH;
+  return SENSOR_ACTIVE_HIGH ? high : !high;
+}
+
+void setValve(bool open) {
+  digitalWrite(PIN_VALVE, open != RELAY_ACTIVE_LOW ? HIGH : LOW);
+  digitalWrite(PIN_LED, open ? HIGH : LOW);
+}
+
+<span class="cm">// Üç kısa bip: "damacana dolu, değiştir"</span>
+void beep() {
+  if (!BUZZER_ENABLED) return;
+  for (uint8_t i = 0; i &lt; 3; i++) {
+    digitalWrite(PIN_BUZZER, HIGH);
+    delay(120);
+    digitalWrite(PIN_BUZZER, LOW);
+    delay(120);
+  }
+}
+
+<span class="cm">// Düğmeye basıldığı anı bir kez bildirir (50 ms parazit filtresi)</span>
+bool buttonPressed() {
+  static bool last = HIGH;
+  static unsigned long changedAt = 0;
+  bool now = digitalRead(PIN_BUTTON);
+  if (now != last &amp;&amp; millis() - changedAt &gt; 50) {
+    changedAt = millis();
+    last = now;
+    return now == LOW;
+  }
+  return false;
+}
+
+void startFilling(const char* why) {
+  lastTransfer = millis();
+  if (bottleFull()) {
+    Serial.println(F("Damacana dolu, aktarim atlandi"));
+    state = FULL;
+    return;
+  }
+  setValve(true);
+  openedAt = millis();
+  state = FILLING;
+  transfers++;
+  Serial.print(F("Vana acildi ("));
+  Serial.print(why);
+  Serial.print(F("), aktarim #"));
+  Serial.println(transfers);
+}
+
+void stopFilling(const char* why) {
+  setValve(false);
+  state = bottleFull() ? FULL : WAITING;
+  Serial.print(F("Vana kapandi: "));
+  Serial.println(why);
+}
+
+void setup() {
+  setValve(false);                 <span class="cm">// pini çıkış yapmadan önce kapalı seviyeye ayarla</span>
+  pinMode(PIN_VALVE, OUTPUT);      <span class="cm">// böylece açılışta röle bir an bile çekmez</span>
+  pinMode(PIN_SENSOR, INPUT);
+  pinMode(PIN_BUTTON, INPUT_PULLUP);
+  pinMode(PIN_BUZZER, OUTPUT);
+  pinMode(PIN_LED, OUTPUT);
+  Serial.begin(9600);
+  lastTransfer = millis() - INTERVAL_MS + FIRST_RUN_MS;  <span class="cm">// ilk aktarım 1 dk sonra</span>
+  Serial.println(F("Damacana kontrolcusu basladi"));
+}
+
+void loop() {
+  unsigned long now = millis();
+  bool full = bottleFull();
+  bool pressed = buttonPressed();
+
+  switch (state) {
+    case WAITING:
+      if (full) {
+        state = FULL;
+        Serial.println(F("Damacana dolu"));
+      } else if (pressed) {
+        startFilling("dugme");
+      } else if (now - lastTransfer &gt;= INTERVAL_MS) {
+        startFilling("zamanlayici");
+      }
+      break;
+
+    case FILLING:
+      if (full)                          stopFilling("damacana doldu");
+      else if (now - openedAt &gt;= OPEN_MS) stopFilling("sure bitti");
+      else if (pressed)                  stopFilling("dugme");
+      break;
+
+    case FULL:
+      if (full) {
+        emptySince = 0;
+        if (lastBeep == 0 || now - lastBeep &gt;= BEEP_EVERY_MS) {
+          lastBeep = now;
+          beep();
+        }
+      } else {
+        if (emptySince == 0) emptySince = now;
+        if (now - emptySince &gt;= SWAP_STABLE_MS) {
+          emptySince = 0;
+          state = WAITING;
+          lastTransfer = now - INTERVAL_MS + FIRST_RUN_MS;
+          Serial.println(F("Yeni damacana algilandi, 1 dk sonra aktarim"));
+        }
+      }
+      break;
+  }
+}</pre>
+    </section>
+  </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const TANK = 3, BOT_CAP = 19, SENSE_L = 18, USABLE = 18;
+  let t = 0, tank = 3, bot = 12, playing = true, manualUntil = -1, last = performance.now();
+  const cfg = () => ({ mode: $('mode').value, iv: +$('interval').value * 60, dur: +$('duration').value, inflow: +$('inflow').value });
+  const fmt = (n, d = 1) => n.toFixed(d).replace('.', ',');
+  const hhmm = m => { m = ((m % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(Math.floor(m % 60)).padStart(2, '0'); };
+  const dur = h => h >= 24 ? fmt(h / 24) + ' gün' : Math.round(h) + ' saat';
+  const timerOn = c => c.mode === 'sensor' || (t % c.iv) < c.dur || t < manualUntil;
+  const bar = L => 0.3 + 2.5 * L / TANK;                 // tank basıncı (bar)
+  const flowLpm = L => L > 0.02 ? 0.35 + 0.45 * bar(L) : 0; // basınca bağlı debi (L/dk)
+
+  function botY(L) {
+    if (L <= 17) return 368 - L / 17 * 150;
+    if (L <= 18.7) return 218 - (L - 17) / 1.7 * 40;
+    return 178 - (L - 18.7) / 0.3 * 28;
+  }
+  $('senseLine').setAttribute('y1', botY(SENSE_L)); $('senseLine').setAttribute('y2', botY(SENSE_L));
+
+  const scen = [[1, 1], [2, 2], [3, 3], [5, 6], [8, 8]];
+  function drawScen() {
+    const sel = 3 / cfg().inflow;
+    $('scen').innerHTML = scen.map(([T, iv]) => {
+      const n = 24 / iv, per = Math.min(TANK, 3 / T * iv), daily = per * n;
+      return `<tr class="${Math.abs(T - sel) < .01 ? 'hl' : ''}"><td>${T} saat</td><td class="num">${iv} saatte bir</td><td class="num">${n}</td><td class="num">${fmt(per)} L</td><td class="num">${fmt(daily)} L</td><td class="num">${n * 5} dk</td><td class="num">${dur(USABLE / daily * 24)}</td></tr>`;
+    }).join('');
+  }
+
+  function drawTimeline() {
+    const c = cfg(), el = $('timeline');
+    el.innerHTML = '';
+    if (c.mode === 'sensor') {
+      el.innerHTML = '<div class="msg">Zamanlayıcı yok: vana damacana dolana kadar açık</div>';
+    } else {
+      const times = [];
+      for (let m = 0; m < 1440; m += c.iv) {
+        const d = document.createElement('div'); d.className = 'tick';
+        d.style.left = (m / 1440 * 100) + '%'; d.title = hhmm(m); el.appendChild(d); times.push(hhmm(m));
+      }
+      for (let h = 0; h <= 24; h += 3) {
+        const s = document.createElement('span'); s.className = 'hr';
+        s.style.left = Math.min(Math.max(h / 24 * 100, 3), 97) + '%'; s.textContent = String(h).padStart(2, '0'); el.appendChild(s);
+      }
+      const n = document.createElement('div'); n.className = 'now'; n.id = 'nowBar'; el.appendChild(n);
+    }
+    const T = 3 / c.inflow, ivh = c.iv / 60, per = Math.min(TANK, c.inflow * ivh), n = 24 / ivh, daily = per * n;
+    const times = []; for (let m = 0; m < 1440; m += c.iv) times.push(hhmm(m));
+    $('calc').innerHTML = c.mode === 'sensor'
+      ? `Arıtma üretimi   = 3 L ÷ ${fmt(T, 0)} sa = <b>${fmt(c.inflow, 2)} L/sa</b> (açık hatta biraz daha fazla)<br>` +
+        `Damacana dolma   = tank 3 L + ${USABLE - 3} L ÷ ${fmt(c.inflow, 2)} L/sa ≈ <b>${dur((USABLE - 3) / c.inflow)}</b><br>` +
+        `Zamanlayıcı      = yok, vana dolana kadar açık`
+      : `Tank dolma       = <b>${fmt(T, 0)} saat</b> (${fmt(c.inflow, 2)} L/sa)<br>` +
+        `Tetik başına su  = min(3 L, ${fmt(c.inflow, 2)} × ${ivh} sa) = <b>${fmt(per)} L</b> ${ivh >= T ? '<span class="pill ok">tank dolu açılıyor</span>' : '<span class="pill live">tank dolmadan açılıyor, aralığı uzatabilirsin</span>'}<br>` +
+        `Tetik sayısı     = 24 ÷ ${ivh} = <b>${n} / gün</b> → ${times.join(', ')}<br>` +
+        `Damacanaya       = ${fmt(per)} L × ${n} = <b>${fmt(daily)} L/gün</b><br>` +
+        `Damacana dolma   = ${USABLE} L ÷ ${fmt(daily)} L/gün = <b>${dur(USABLE / daily * 24)}</b><br>` +
+        `Vana açık        = ${n} × ${c.dur} dk = ${n * c.dur} dk/gün`;
+    drawScen();
+  }
+
+  function setSwitch(el, x2, y, closed) { el.setAttribute('x2', closed ? x2 : x2 - 4); el.setAttribute('y2', closed ? y : y - 18); }
+
+  function frame(now) {
+    const dtReal = Math.min((now - last) / 1000, 0.1); last = now;
+    const c = cfg();
+    const opening = timerOn(c) && bot < SENSE_L;
+    const speed = opening ? (c.mode === 'sensor' ? 30 : 1.5) : 90;   // sim dk / sn
+    if (playing) {
+      const dt = dtReal * speed;
+      t += dt;
+      const open = timerOn(c) && bot < SENSE_L;
+      const prod = tank < TANK || open ? c.inflow * dt / 60 : 0;   // tank dolunca arıtma durur
+      tank = Math.min(TANK, tank + prod);
+      if (open) {
+        const q = Math.min(flowLpm(tank) * dt, tank, SENSE_L - bot + 0.001);
+        tank -= q; bot += q;
+      }
+    }
+    const on = timerOn(c), full = bot >= SENSE_L, open = on && !full;
+
+    const tankH = tank / TANK * 98;
+    $('tankWater').setAttribute('y', 360 - tankH); $('tankWater').setAttribute('height', tankH);
+    $('barTxt').textContent = fmt(tank > 0.02 ? bar(tank) : 0) + ' bar';
+    const by = botY(bot);
+    $('botWater').setAttribute('y', by); $('botWater').setAttribute('height', 368 - by);
+    const ledFill = full ? 'var(--sensor)' : 'var(--muted)';
+    $('senseLed').setAttribute('fill', ledFill); $('senseLed2').setAttribute('fill', ledFill);
+    $('senseLed').classList.toggle('blink', full);
+    $('senseTxt').textContent = full ? 'sensör: DOLU → kapat' : 'sensör: boş';
+    $('flowPipe').classList.toggle('on', open && playing);
+    $('cableFlow').classList.toggle('on', open);
+    $('valveCoil').style.fill = open ? 'var(--live)' : '';
+    $('coilSym').style.fill = open ? 'var(--live)' : '';
+    const ang = (t % 720) / 720 * 2 * Math.PI;
+    $('clockHand').setAttribute('x2', 30 + 9 * Math.sin(ang)); $('clockHand').setAttribute('y2', 22 - 9 * Math.cos(ang));
+
+    setSwitch($('swT'), 170, 80, on);
+    setSwitch($('swK'), 530, 80, !full);
+    $('acFlow').classList.toggle('on', on);
+    $('dcFlow').classList.toggle('on', open);
+    $('coilFlow').classList.toggle('on', on && full);
+    $('logic').textContent = `T1=${on ? 'kapalı' : 'açık'} · K1=${full ? 'AÇIK (dolu)' : 'kapalı'} → vana ${open ? 'AÇIK, su akıyor' : 'kapalı'}`;
+
+    $('clock').textContent = 'Gün ' + (Math.floor(t / 1440) + 1) + ' · ' + hhmm(t);
+    const nxt = c.iv - (t % c.iv);
+    $('next').textContent = c.mode === 'sensor' ? 'sürekli' : on ? 'şimdi' : Math.floor(nxt / 60) + ' sa ' + String(Math.floor(nxt % 60)).padStart(2, '0') + ' dk';
+    $('srcL').textContent = fmt(tank) + ' L';
+    $('botL').innerHTML = fmt(bot) + ' L' + (full ? ' <span class="pill bad">dolu</span>' : '');
+    const pill = $('valvePill');
+    if (open) { pill.className = 'pill live'; pill.textContent = 'açık'; }
+    else if (on && full) { pill.className = 'pill bad'; pill.textContent = 'sensör kapattı'; }
+    else { pill.className = 'pill idle'; pill.textContent = 'kapalı'; }
+    $('speedLbl').textContent = !playing ? 'duraklatıldı' : open && c.mode === 'timer' ? 'yavaş çekim · aktarım' : 'hızlandırılmış';
+    const nb = $('nowBar'); if (nb) nb.style.left = ((t % 1440) / 1440 * 100) + '%';
+    requestAnimationFrame(frame);
+  }
+
+  $('play').onclick = () => { playing = !playing; $('play').textContent = playing ? 'Duraklat' : 'Devam et'; };
+  $('trigger').onclick = () => { manualUntil = t + cfg().dur; };
+  $('swap').onclick = () => { bot = 0; };
+  ['mode', 'interval', 'duration', 'inflow'].forEach(id => $(id).addEventListener('change', drawTimeline));
+  drawTimeline();
+  requestAnimationFrame(frame);
+})();
+</script>
+
+<script>
+(() => {
+  const tabs = [...document.querySelectorAll('.tab')];
+  function show(name) {
+    tabs.forEach(b => {
+      const on = b.id === 'tabbtn-' + name;
+      b.setAttribute('aria-selected', on);
+      document.getElementById(b.getAttribute('aria-controls')).hidden = !on;
+    });
+  }
+  tabs.forEach(b => b.addEventListener('click', () => {
+    const name = b.id.replace('tabbtn-', '');
+    show(name);
+    try { history.replaceState(null, '', '#' + name); } catch (e) {}
+  }));
+  if (location.hash === '#arduino') show('arduino');
+})();
+(() => {
+  const $ = id => document.getElementById(id);
+  // kodun ayarlarıyla aynı (dakika)
+  const INTERVAL = 360, OPEN = 5, FIRST = 1, SWAP_STABLE = 5 / 60, BEEP_EVERY = 10;
+  const SENSE_L = 18, FLOW = 0.75, TANK = 3;    // L/dk, tank başına en fazla 3 L
+  let t = 0, bot = 14, state = 'WAITING', lastTransfer = -INTERVAL + FIRST, openedAt = 0, poured = 0;
+  let transfers = 0, lastBeep = -99, emptySince = null, beepUntil = -1, btnUntil = -1, pending = false;
+  let playing = true, last = performance.now();
+  const serial = $('a-serial');
+  const hm = m => Math.floor(m / 60) + ' sa ' + String(Math.floor(m % 60)).padStart(2, '0') + ' dk';
+  function log(msg) {
+    const d = document.createElement('div');
+    d.textContent = `[${hm(t)}] ${msg}`;
+    serial.appendChild(d);
+    while (serial.children.length > 60) serial.firstChild.remove();
+    serial.scrollTop = serial.scrollHeight;
+  }
+  log('Damacana kontrolcusu basladi');
+  const full = () => bot >= SENSE_L;
+
+  function startFilling(why) {
+    lastTransfer = t;
+    if (full()) { log('Damacana dolu, aktarim atlandi'); state = 'FULL'; return; }
+    state = 'FILLING'; openedAt = t; poured = 0; transfers++;
+    log(`Vana acildi (${why}), aktarim #${transfers}`);
+  }
+  function stopFilling(why) {
+    state = full() ? 'FULL' : 'WAITING';
+    log('Vana kapandi: ' + why);
+  }
+
+  function step(dt) {
+    t += dt;
+    const pressed = pending; pending = false;
+    if (state === 'FILLING') {
+      const q = Math.min(FLOW * dt, TANK - poured);
+      poured += q; bot = Math.min(19, bot + q);
+    }
+    const f = full();
+    if (state === 'WAITING') {
+      if (f) { state = 'FULL'; log('Damacana dolu'); }
+      else if (pressed) startFilling('dugme');
+      else if (t - lastTransfer >= INTERVAL) startFilling('zamanlayici');
+    } else if (state === 'FILLING') {
+      if (f) stopFilling('damacana doldu');
+      else if (t - openedAt >= OPEN) stopFilling('sure bitti');
+      else if (pressed) stopFilling('dugme');
+    } else {
+      if (f) {
+        emptySince = null;
+        if (t - lastBeep >= BEEP_EVERY) { lastBeep = t; beepUntil = t + 0.25; }
+      } else {
+        if (emptySince === null) emptySince = t;
+        if (t - emptySince >= SWAP_STABLE) {
+          emptySince = null; state = 'WAITING'; lastTransfer = t - INTERVAL + FIRST;
+          log('Yeni damacana algilandi, 1 dk sonra aktarim');
+        }
+      }
+    }
+  }
+
+  function frame(now) {
+    const dtReal = Math.min((now - last) / 1000, 0.1); last = now;
+    if (playing) {
+      const speed = state === 'FILLING' ? 1.5 : state === 'FULL' ? 6 : 60;   // sim dk / sn
+      let dt = dtReal * speed;
+      while (dt > 0) { const s = Math.min(dt, 0.05); step(s); dt -= s; }
+    }
+    const filling = state === 'FILLING', f = full();
+    $('a-fD9').classList.toggle('on', filling);
+    $('a-fValve').classList.toggle('on', filling);
+    $('a-fSens').classList.toggle('on', f);
+    $('a-fBuzz').classList.toggle('on', t < beepUntil);
+    $('a-fBtn').classList.toggle('on', t < btnUntil);
+    $('a-btnBar').setAttribute('x1', t < btnUntil ? 355 : 362); $('a-btnBar').setAttribute('x2', t < btnUntil ? 355 : 362);
+    $('a-valveBox').style.fill = filling ? 'var(--live)' : '';
+    $('a-ledD13').setAttribute('fill', filling ? '#ffbe3b' : '#3a4a52');
+    $('a-relayLed').setAttribute('fill', filling ? 'var(--bad)' : 'var(--muted)');
+    $('a-relayBlade').setAttribute('x2', filling ? 566 : 578); $('a-relayBlade').setAttribute('y2', filling ? 211 : 208);
+    $('a-sensLed').setAttribute('fill', f ? 'var(--sensor)' : 'var(--muted)');
+    $('a-buzz').style.fill = t < beepUntil ? 'var(--live)' : '';
+    const st = $('a-state');
+    st.textContent = state;
+    st.className = 'pill ' + (filling ? 'live' : state === 'FULL' ? 'bad' : 'idle');
+    $('a-clock').textContent = hm(t);
+    const nxt = INTERVAL - (t - lastTransfer);
+    $('a-next').textContent = filling ? 'şimdi' : state === 'FULL' ? 'damacana bekleniyor' : hm(Math.max(0, nxt));
+    $('a-count').textContent = transfers;
+    $('a-botL').textContent = bot.toFixed(1).replace('.', ',') + ' L';
+    $('a-gauge').style.width = (bot / 19 * 100) + '%';
+    $('a-speedLbl').textContent = !playing ? 'duraklatıldı' : filling ? 'yavaş çekim · vana açık' : 'hızlandırılmış';
+    requestAnimationFrame(frame);
+  }
+
+  $('a-play').onclick = () => { playing = !playing; $('a-play').textContent = playing ? 'Duraklat' : 'Devam et'; };
+  $('a-press').onclick = () => { pending = true; btnUntil = t + (state === 'FILLING' ? 0.3 : 3); };
+  $('a-swap').onclick = () => { bot = 0; };
+  $('a-copy').onclick = () => {
+    const txt = $('a-code').textContent, btn = $('a-copy');
+    const done = m => { btn.textContent = m; setTimeout(() => btn.textContent = 'Kodu kopyala', 1600); };
+    navigator.clipboard.writeText(txt).then(() => done('Kopyalandı'), () => {
+      const r = document.createRange(); r.selectNodeContents($('a-code'));
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r); done('Seçildi, Ctrl+C ile kopyala');
+    });
+  };
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
