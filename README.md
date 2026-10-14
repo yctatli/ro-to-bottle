@@ -342,7 +342,7 @@ Arıtmanın tankı dolunca cihaz kendiliğinden durur, yani **tank taşmaz**. En
     └── img/                           ← README ekran görüntüleri
 ```
 
-`docs/index.html` tek başına çalışan bir sayfadır: indirip çift tıklaman yeterli. Depo ayarlarından **GitHub Pages**'i `main` dalı ve `/docs` klasörüyle açarsan sayfa `https://yctatli.github.io/damacana-otomasyon/` adresinde de yayınlanır.
+`docs/index.html` tek başına çalışan bir sayfadır: indirip çift tıklaman yeterli. Depo ayarlarından **GitHub Pages**'i `main` dalı ve `/docs` klasörüyle açarsan sayfa `https://yctatli.github.io/ro-to-bottle/` adresinde de yayınlanır.
 
 ---
 
